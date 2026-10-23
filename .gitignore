@@ -1,12 +1,12 @@
 # Raw TWSE response cache — ~2,800 small files, fully reproducible by re-running
-# fetch_data.py. Delete it and the next run refetches (slowly); keep it and
+# pipeline/fetch_data.py. Delete it and the next run refetches (slowly); keep it and
 # re-runs finish in seconds.
-data/raw/
+web/data/raw/
 
-# Per-stock outputs of fetch_stocks.py. Built and deployed from the machine
+# Per-stock outputs of pipeline/fetch_stocks.py. Built and deployed from the machine
 # that runs the fetch (run.sh deploy uploads them from disk), so they never
-# need to be in git. Rebuild with `python3 fetch_stocks.py`.
-data/stocks/
+# need to be in git. Rebuild with `python3 pipeline/fetch_stocks.py`.
+web/data/stocks/
 
 # Build artifacts of the fetcher
 fetch.log
@@ -14,12 +14,12 @@ fetch_stocks.log
 __pycache__/
 *.pyc
 
-# Test-only dev dependencies (jsdom + echarts, for tests/render.test.js).
+# Test-only dev dependencies (jsdom + echarts, for the page tests in tests/js/).
 # The dashboard itself needs none of this.
 node_modules/
 package-lock.json
 
-# Generated single-file build (rebuild with `python3 bundle.py`)
+# Generated single-file build (rebuild with `python3 pipeline/bundle.py`)
 dist/
 vendor/
 
@@ -27,11 +27,11 @@ vendor/
 *.swp
 .claude/settings.local.json
 
-# Cron lock for update_data.sh
+# Cron lock for scripts/update_data.sh
 .update_data.lock
 
 # Cloudflare credentials for ./run.sh deploy
 .env
-data/.fetch_stocks.lock
+web/data/.fetch_stocks.lock
 .wrangler/
 .venv/

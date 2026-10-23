@@ -1,4 +1,4 @@
-// /api/login — see lib/account.mjs
-import { handle } from "../../lib/account.mjs";
+// /api/login — see server/account.mjs
+import { handle } from "../../server/account.mjs";
 
 export const onRequest = ctx => handle("login", ctx);

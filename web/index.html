@@ -415,7 +415,7 @@
 </div>
 
 <script src="data/taiex-daily.js"></script>
-<script src="detect.js"></script>
+<script src="js/detect.js"></script>
 <script>
 (function(){
   "use strict";
@@ -453,7 +453,7 @@
     const e = document.getElementById('error');
     e.hidden = false;
     e.innerHTML = '<strong>找不到資料。</strong><br>' +
-      '請先執行 <code>python3 fetch_data.py</code> 產生 <code>data/taiex-daily.js</code>，' +
+      '請先執行 <code>python3 pipeline/fetch_data.py</code> 產生 <code>data/taiex-daily.js</code>，' +
       '再重新整理本頁。<br>本頁不使用任何模擬資料。';
     return;
   }

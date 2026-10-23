@@ -7,7 +7,7 @@
  */
 "use strict";
 
-const { detectEpisodes } = require("../detect.js");
+const { detectEpisodes } = require("../../web/js/detect.js");
 
 // Build a series from closes. `extra` maps an index to chip fields.
 const series = (closes, extra = {}) => closes.map((p, i) => ({

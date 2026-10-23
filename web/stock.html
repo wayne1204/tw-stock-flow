@@ -395,7 +395,7 @@
   const LIST = window.STOCK_LIST;
   if(!Array.isArray(LIST) || !LIST.length){
     showError('<strong>找不到個股資料。</strong><br>請在 <code>stocks.txt</code> 加入股票代號，' +
-      '執行 <code>python3 fetch_stocks.py</code> 產生 <code>data/stocks/</code> 後重新整理本頁。');
+      '執行 <code>python3 pipeline/fetch_stocks.py</code> 產生 <code>data/stocks/</code> 後重新整理本頁。');
     return;
   }
 
@@ -817,7 +817,7 @@
         q.value = label(S.stock);
         return;
       }
-      showError(`<strong>${code} 的資料載入失敗。</strong><br>請執行 <code>python3 fetch_stocks.py</code>，` +
+      showError(`<strong>${code} 的資料載入失敗。</strong><br>請執行 <code>python3 pipeline/fetch_stocks.py</code>，` +
         `確認 <code>data/stocks/${code}.js</code> 已產生。`);
     });
   }

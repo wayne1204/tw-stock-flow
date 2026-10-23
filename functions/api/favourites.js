@@ -1,4 +1,4 @@
-// /api/favourites — see lib/account.mjs
-import { handle } from "../../lib/account.mjs";
+// /api/favourites — see server/account.mjs
+import { handle } from "../../server/account.mjs";
 
 export const onRequest = ctx => handle("favourites", ctx);

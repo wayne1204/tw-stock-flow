@@ -4,16 +4,16 @@
   "description": "TAIEX correction-wave analysis with turnover, foreign flow and margin-balance overlays",
   "private": true,
   "scripts": {
-    "test": "node tests/run.js",
-    "verify": "node verify.js",
-    "serve": "python3 -m http.server 8000",
-    "bundle": "python3 bundle.py"
+    "test": "node tests/js/run.js",
+    "verify": "node scripts/verify.js",
+    "serve": "python3 -m http.server 8000 --directory web",
+    "bundle": "python3 pipeline/bundle.py"
   },
   "devDependencies": {
     "echarts": "^5.5.1",
     "jsdom": "^24.0.0"
   },
   "comments": {
-    "devDependencies": "Only tests/render.test.js needs these — it executes index.html in a headless DOM. The dashboard itself has no build step and no runtime dependencies; it loads ECharts from a CDN and opens straight from the filesystem. Without these installed the render suite reports SKIP and everything else still runs."
+    "devDependencies": "Only tests/js/render.test.js and tests/js/stock.test.js need these — they execute the pages in a headless DOM. The dashboard itself has no build step and no runtime dependencies; it loads ECharts from a CDN and opens straight from the filesystem. Without these installed the render suite reports SKIP and everything else still runs."
   }
 }

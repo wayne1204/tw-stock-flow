@@ -4,7 +4,7 @@ Unit tests for fetch_stocks.py parsers. Fully offline: every input is a small
 inline excerpt shaped like the real response, and SESSION.get is patched to
 fail loudly if anything tries the network.
 
-Run with:  python3 tests/stock_fetch_test.py
+Run with:  python3 tests/py/stock_fetch_test.py
 """
 
 import os
@@ -12,8 +12,9 @@ import sys
 import unittest
 from unittest.mock import patch
 
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, PROJECT_ROOT)
+PIPELINE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__)))), "pipeline")
+sys.path.insert(0, PIPELINE_DIR)
 
 import fetch_data  # noqa: E402
 import fetch_stocks as fs  # noqa: E402

@@ -2,7 +2,7 @@
 """
 Build a single self-contained HTML file.
 
-    python3 bundle.py            ->  dist/taiex-atlas-standalone.html
+    python3 pipeline/bundle.py          ->  dist/taiex-atlas-standalone.html
 
 Inlines ECharts, the merged dataset and detect.js into one file with no external
 requests at all. That file opens straight from a phone's filesystem, works fully
@@ -16,7 +16,8 @@ import os
 import re
 import sys
 
-ROOT = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+WEB = os.path.join(ROOT, "web")
 DIST = os.path.join(ROOT, "dist")
 VENDOR = os.path.join(ROOT, "vendor")
 
@@ -63,12 +64,12 @@ def echarts_source(url):
 
 
 def main():
-    html = read(os.path.join(ROOT, "index.html"))
+    html = read(os.path.join(WEB, "index.html"))
 
-    data_js = os.path.join(ROOT, "data", "taiex-daily.js")
+    data_js = os.path.join(WEB, "data", "taiex-daily.js")
     if not os.path.exists(data_js):
         raise SystemExit(
-            "ERROR: data/taiex-daily.js not found — run `python3 fetch_data.py` first.\n"
+            "ERROR: web/data/taiex-daily.js not found — run `python3 pipeline/fetch_data.py` first.\n"
             "This build refuses to produce a page with no data rather than shipping "
             "an empty shell.")
 
@@ -82,7 +83,7 @@ def main():
 
     # 2. Every local <script src=...>
     for tag, rel in [(mm.group(0), mm.group(1)) for mm in LOCAL_RE.finditer(html)]:
-        path = os.path.join(ROOT, rel)
+        path = os.path.join(WEB, rel)
         if not os.path.exists(path):
             raise SystemExit(f"ERROR: {rel} referenced by index.html but not found")
         body = read(path)

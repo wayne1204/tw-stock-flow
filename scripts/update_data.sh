@@ -2,12 +2,12 @@
 # Refresh the TAIEX dataset unattended. Written for cron, safe to run by hand.
 #
 # Usage:
-#   ./update_data.sh                  Incremental fetch, append to fetch.log
-#   ./update_data.sh --start 2026-01  Narrow the fetch window (see fetch_data.py)
-#   ./update_data.sh --bundle         Also rebuild dist/taiex-atlas-standalone.html
-#   ./update_data.sh --commit         git-commit the data files if they changed
-#   ./update_data.sh --deploy         Publish to Cloudflare Pages (see run.sh deploy)
-#   ./update_data.sh --quiet          Log only; do not echo progress to stdout
+#   scripts/update_data.sh                  Incremental fetch, append to fetch.log
+#   scripts/update_data.sh --start 2026-01  Narrow the fetch window (see pipeline/fetch_data.py)
+#   scripts/update_data.sh --bundle         Also rebuild dist/taiex-atlas-standalone.html
+#   scripts/update_data.sh --commit         git-commit the data files if they changed
+#   scripts/update_data.sh --deploy         Publish to Cloudflare Pages (see run.sh deploy)
+#   scripts/update_data.sh --quiet          Log only; do not echo progress to stdout
 #
 # Environment:
 #   PYTHON  interpreter to use (default: python3 on PATH, else /usr/bin/python3).
@@ -20,12 +20,12 @@
 #   - non-zero exit + a tail of the log on stderr, so cron mails you a real
 #     error instead of failing silently
 #
-# The fetch is incremental (data/raw/ is a permanent response cache), so a
+# The fetch is incremental (web/data/raw/ is a permanent response cache), so a
 # normal weekday run is a handful of requests and finishes in seconds.
 
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 LOG="${LOG:-$ROOT/fetch.log}"
@@ -93,14 +93,14 @@ fi
 
 say "[$(date '+%F %T')] update start (python: $PYTHON)"
 
-if ! "$PYTHON" fetch_data.py "${START_ARGS[@]}" >>"$LOG" 2>&1; then
+if ! "$PYTHON" pipeline/fetch_data.py "${START_ARGS[@]}" >>"$LOG" 2>&1; then
   fail "fetch_data.py exited non-zero"
 fi
 
 # The watchlist is optional; a failure here is reported but does not block the
 # market-level refresh and deploy below.
-if [[ -s stocks.txt ]]; then
-  if "$PYTHON" fetch_stocks.py >>"$LOG" 2>&1; then
+if [[ -s config/stocks.txt ]]; then
+  if "$PYTHON" pipeline/fetch_stocks.py >>"$LOG" 2>&1; then
     say "  watchlist stocks refreshed"
   else
     say "  WARNING: fetch_stocks.py exited non-zero (see $LOG)"
@@ -109,22 +109,22 @@ if [[ -s stocks.txt ]]; then
 fi
 
 if (( DO_BUNDLE )); then
-  if ! "$PYTHON" bundle.py >>"$LOG" 2>&1; then
+  if ! "$PYTHON" pipeline/bundle.py >>"$LOG" 2>&1; then
     fail "bundle.py exited non-zero"
   fi
 fi
 
 # fetch_data.py writes the outputs even when a day is missing, so report what
 # actually landed instead of assuming the run moved the series forward.
-LATEST="$("$PYTHON" -c 'import json;d=json.load(open("data/taiex-daily.json"));print(d[-1]["date"], len(d))')" \
-  || fail "could not read data/taiex-daily.json"
+LATEST="$("$PYTHON" -c 'import json;d=json.load(open("web/data/taiex-daily.json"));print(d[-1]["date"], len(d))')" \
+  || fail "could not read web/data/taiex-daily.json"
 say "[$(date '+%F %T')] latest trading day ${LATEST% *} (${LATEST#* } rows)"
 
 if (( DO_COMMIT )); then
-  if git diff --quiet -- data/taiex-daily.json data/taiex-daily.js; then
+  if git diff --quiet -- web/data/taiex-daily.json web/data/taiex-daily.js; then
     say "  data unchanged; nothing to commit"
   else
-    git add data/taiex-daily.json data/taiex-daily.js
+    git add web/data/taiex-daily.json web/data/taiex-daily.js
     git commit -q -m "chore(data): refresh TAIEX daily dataset through ${LATEST% *}" \
       >>"$LOG" 2>&1 || fail "git commit failed"
     say "  committed refreshed data through ${LATEST% *}"

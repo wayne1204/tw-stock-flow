@@ -11,17 +11,17 @@ merges them into a single daily series:
   4. Margin & short stats    MI_MARGN        (single-day query)
 
 Outputs:
-  data/taiex-daily.json          merged daily series
-  data/taiex-daily.js            same payload as window.TAIEX_DATA, so index.html
-                                 works when opened directly over file://
-  data/raw/<endpoint>/*.json     raw response cache (re-runs skip these entirely)
+  web/data/taiex-daily.json          merged daily series
+  web/data/taiex-daily.js            same payload as window.TAIEX_DATA, so index.html
+                                     works when opened directly over file://
+  web/data/raw/<endpoint>/*.json     raw response cache (re-runs skip these entirely)
 
 Usage:
-  python3 fetch_data.py                    # full run (~150 min first time; almost
-                                           #   all of it is rate-limit sleeping)
-  python3 fetch_data.py --start 2024-01    # backfill a narrower window
-  python3 fetch_data.py --rebuild          # no requests at all; rebuild outputs
-                                           #   from the existing cache
+  python3 pipeline/fetch_data.py                  # full run (~150 min first time; almost
+                                                  #   all of it is rate-limit sleeping)
+  python3 pipeline/fetch_data.py --start 2024-01  # backfill a narrower window
+  python3 pipeline/fetch_data.py --rebuild        # no requests at all; rebuild outputs
+                                                  #   from the existing cache
 
 Note: the Chinese string literals below are matched against TWSE response
 payloads (row labels such as the foreign-investor and margin rows). They are
@@ -44,8 +44,8 @@ import requests
 # --------------------------------------------------------------------------
 
 BASE = "https://www.twse.com.tw/rwd/zh"
-ROOT = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(ROOT, "data")
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA_DIR = os.path.join(ROOT, "web", "data")
 RAW_DIR = os.path.join(DATA_DIR, "raw")
 
 DEFAULT_START = "2017-01"
@@ -253,7 +253,7 @@ def merge_with_existing(path, fetched):
     newer. Anything unreadable is treated as absent: a corrupt or hand-edited
     output file must not be able to inject rows into a clean fetch.
 
-    To genuinely shrink the series, delete data/taiex-daily.json and refetch.
+    To genuinely shrink the series, delete web/data/taiex-daily.json and refetch.
     """
     if not os.path.exists(path):
         return list(fetched), 0
@@ -431,7 +431,7 @@ def fetch_margin_day(ymd, rebuild_only=False):
 
 def main():
     ap = argparse.ArgumentParser(
-        description="Fetch TWSE data and build data/taiex-daily.json")
+        description="Fetch TWSE data and build web/data/taiex-daily.json")
     ap.add_argument("--start", default=DEFAULT_START,
                     help="start month YYYY-MM (default 2017-01)")
     ap.add_argument("--end", default=None, help="end month YYYY-MM (default: today)")

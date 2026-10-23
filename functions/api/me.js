@@ -1,4 +1,4 @@
-// /api/me — see lib/account.mjs
-import { handle } from "../../lib/account.mjs";
+// /api/me — see server/account.mjs
+import { handle } from "../../server/account.mjs";
 
 export const onRequest = ctx => handle("me", ctx);

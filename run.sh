@@ -3,12 +3,12 @@
 #
 # Usage:
 #   ./run.sh              Fetch latest data, then serve at http://localhost:3001
-#   ./run.sh --no-fetch   Skip fetching, serve existing data/taiex-daily.json as-is
+#   ./run.sh --no-fetch   Skip fetching, serve existing web/data/taiex-daily.json as-is
 #   ./run.sh --port 9000  Serve on a custom port
 #   ./run.sh deploy                   Publish to Cloudflare Pages (production)
 #   ./run.sh deploy --branch preview  Publish a preview with its own *.pages.dev URL
 #
-# Data is cached in data/raw/, so a first-time fetch takes ~110 minutes but
+# Data is cached in web/data/raw/, so a first-time fetch takes ~110 minutes but
 # subsequent runs only fetch new trading days (usually seconds).
 #
 # Deploy environment:
@@ -18,13 +18,13 @@
 #                     Read from ./.env (gitignored) when present; not needed
 #                     where `wrangler login` has been run.
 #
-# Deploy uploads only the files the pages load (plus stock.html and
-# data/stocks/*.js once fetch_stocks.py has run), staged into a temp dir.
+# Deploy uploads only the files in web/ the pages load (plus stock.html and
+# data/stocks/*.js once pipeline/fetch_stocks.py has run), staged into a temp dir.
 # wrangler also compiles ./functions (the account API, see README) from the
 # repo root, where this script runs; its D1 binding and GOOGLE_CLIENT_ID are
 # set once in the Pages project settings.
-# data/raw/, fetch.log, tests and notes never leave this machine. The project
-# is created on first deploy. Safe to call from cron via update_data.sh --deploy.
+# web/data/raw/, fetch.log, tests and notes never leave this machine. The project
+# is created on first deploy. Safe to call from cron via scripts/update_data.sh --deploy.
 
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
@@ -51,26 +51,27 @@ deploy() {
   fi
   export PATH="$(dirname "$wrangler"):$PATH"
 
-  local files=(index.html stock.html detect.js data/taiex-daily.js) f
+  # Paths are relative to web/, the site root.
+  local files=(index.html stock.html js/detect.js data/taiex-daily.js) f
   for f in "${files[@]}"; do
-    [[ -s "$f" ]] || { echo "run.sh deploy: missing $f (run python3 fetch_data.py)" >&2; exit 1; }
+    [[ -s "web/$f" ]] || { echo "run.sh deploy: missing web/$f (run python3 pipeline/fetch_data.py)" >&2; exit 1; }
   done
 
   # stock.html always ships: index.html links to it, and Pages answers a
   # missing path with index.html, so leaving it out makes the tab silently
   # reload the market page. Without data it shows its own "run
   # fetch_stocks.py" notice instead.
-  if [[ -s data/stocks/index.js ]]; then
-    files+=(data/stocks/*.js)
+  if [[ -s web/data/stocks/index.js ]]; then
+    files+=($(cd web && echo data/stocks/*.js))
   else
-    echo "run.sh deploy: WARNING no data/stocks/ (run python3 fetch_stocks.py); stock.html ships without data" >&2
+    echo "run.sh deploy: WARNING no web/data/stocks/ (run python3 pipeline/fetch_stocks.py); stock.html ships without data" >&2
   fi
 
   STAGE="$(mktemp -d)"
   trap 'rm -rf "$STAGE"' EXIT
   for f in "${files[@]}"; do
     mkdir -p "$STAGE/$(dirname "$f")"
-    cp "$f" "$STAGE/$f"
+    cp "web/$f" "$STAGE/$f"
   done
 
   # First deploy: create the project. "Already exists" is the normal case after.
@@ -81,7 +82,7 @@ deploy() {
   fi
 
   local data_end
-  data_end="$(sed -n 's/.*"end": "\([0-9-]*\)".*/\1/p' data/taiex-daily.js | head -n 1)"
+  data_end="$(sed -n 's/.*"end": "\([0-9-]*\)".*/\1/p' web/data/taiex-daily.js | head -n 1)"
   "$wrangler" pages deploy "$STAGE" \
     --project-name "$project" \
     --branch "$branch" \
@@ -116,12 +117,12 @@ PY=python3
 
 if [[ "$DO_FETCH" -eq 1 ]]; then
   echo "Fetching TAIEX data (incremental; cached responses are reused)..."
-  "$PY" fetch_data.py
-  if [[ -s stocks.txt ]]; then
+  "$PY" pipeline/fetch_data.py
+  if [[ -s config/stocks.txt ]]; then
     echo "Fetching stock data (whole market + watchlist brokers)..."
-    "$PY" fetch_stocks.py
+    "$PY" pipeline/fetch_stocks.py
   fi
 fi
 
 echo "Serving dashboard at http://localhost:${PORT}"
-exec python3 -m http.server "$PORT"
+exec python3 -m http.server "$PORT" --directory web

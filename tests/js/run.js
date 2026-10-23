@@ -2,13 +2,13 @@
 /**
  * Test runner.
  *
- *   node tests/run.js            run everything
- *   node tests/run.js detect     run only suites whose filename matches "detect"
+ *   node tests/js/run.js         run everything
+ *   node tests/js/run.js detect  run only suites whose filename matches "detect"
  *
  * Three kinds of suite are collected:
  *   *.test.js        JS modules exporting { name, needs?, run(t) }  (see helpers.js)
- *   verify.js        the data + acceptance-criteria report at the project root
- *   fetch_test.py    the Python unittest suite for the fetcher
+ *   verify.js        the data + acceptance-criteria report in scripts/
+ *   tests/py/*.py    the Python unittest suites for the fetchers
  *
  * Suites that cannot run (missing data file, missing dev dependency) are SKIPPED
  * loudly rather than silently passing — a skipped guard is not a green guard.
@@ -21,7 +21,8 @@ const { spawnSync } = require("child_process");
 const { makeContext, C, c } = require("./helpers.js");
 
 const TESTS_DIR = __dirname;
-const ROOT = path.dirname(TESTS_DIR);
+const ROOT = path.join(TESTS_DIR, "..", "..");
+const PY_TESTS_DIR = path.join(TESTS_DIR, "..", "py");
 const filter = process.argv[2] || "";
 
 let totalPass = 0, totalFail = 0, totalSkip = 0;
@@ -99,20 +100,20 @@ function runProcess(suiteName, cmd, args, opts = {}) {
 
   // ── Python fetcher suite ─────────────────────────────────────────────────
   if (!filter || "fetch".includes(filter) || filter.includes("fetch")) {
-    const py = path.join(TESTS_DIR, "fetch_test.py");
+    const py = path.join(PY_TESTS_DIR, "fetch_test.py");
     const venvPy = path.join(ROOT, ".venv", "bin", "python");
     const python = fs.existsSync(venvPy) ? venvPy : "python3";
     runProcess("fetch_data.py — parsers & cache (python unittest)", python, [py],
-      { missing: fs.existsSync(py) ? null : "tests/fetch_test.py not present" });
+      { missing: fs.existsSync(py) ? null : "tests/py/fetch_test.py not present" });
     runProcess("fetch_stocks.py — parsers (python unittest)", python,
-      [path.join(TESTS_DIR, "stock_fetch_test.py")]);
+      [path.join(PY_TESTS_DIR, "stock_fetch_test.py")]);
   }
 
   // ── Data + acceptance criteria ───────────────────────────────────────────
   if (!filter || "verify".includes(filter) || filter.includes("verify")) {
-    const dataFile = path.join(ROOT, "data", "taiex-daily.json");
-    runProcess("verify.js — data integrity & acceptance criteria", "node", ["verify.js"],
-      { missing: fs.existsSync(dataFile) ? null : "data/taiex-daily.json not built — run python3 fetch_data.py" });
+    const dataFile = path.join(ROOT, "web", "data", "taiex-daily.json");
+    runProcess("verify.js — data integrity & acceptance criteria", "node", ["scripts/verify.js"],
+      { missing: fs.existsSync(dataFile) ? null : "web/data/taiex-daily.json not built — run python3 pipeline/fetch_data.py" });
   }
 
   // ── Summary ──────────────────────────────────────────────────────────────

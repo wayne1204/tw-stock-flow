@@ -15,7 +15,7 @@ Builds a daily series for EVERY listed (TWSE) and OTC (TPEx) stock and ETF
   Tracked stocks only (one request per stock per session - too many for all)
   5. Main-force net + brokers  fubon-ebrokerdj (DJ)     (daily tables, 5/20-day windows)
 
-Tracked = stocks.txt (the watchlist) + top200.txt (the top 200 stocks by
+Tracked = config/stocks.txt (the watchlist) + config/top200.txt (the top 200 stocks by
 trading value, written by --refresh-top) + --stocks. Day tables are fetched for
 the last --broker-months (default 12); older days are served from the cache only.
 
@@ -27,16 +27,16 @@ run is six exchange requests plus the watchlist's broker pages; the first run
 after each Saturday also walks every stock's shareholder page (~75 min).
 
 Outputs:
-  data/stocks/<code>.js     one stock, as window.STOCK_DATA[code] (works over file://)
-  data/stocks/index.js      window.STOCK_LIST: every built stock, watchlist first
+  web/data/stocks/<code>.js  one stock, as window.STOCK_DATA[code] (works over file://)
+  web/data/stocks/index.js   window.STOCK_LIST: every built stock, watchlist first
 
 Usage:
-  python3 fetch_stocks.py                     # whole market + watchlist extras
-  python3 fetch_stocks.py --watchlist-only    # just stocks.txt (fast)
-  python3 fetch_stocks.py --stocks 2327,2330  # just these, with broker data
-  python3 fetch_stocks.py --months 36         # deeper history (default 24)
-  python3 fetch_stocks.py --refresh-top       # re-rank top200.txt, then fetch
-  python3 fetch_stocks.py --rebuild           # no requests; cache only
+  python3 pipeline/fetch_stocks.py                     # whole market + watchlist extras
+  python3 pipeline/fetch_stocks.py --watchlist-only    # just config/stocks.txt (fast)
+  python3 pipeline/fetch_stocks.py --stocks 2327,2330  # just these, with broker data
+  python3 pipeline/fetch_stocks.py --months 36         # deeper history (default 24)
+  python3 pipeline/fetch_stocks.py --refresh-top       # re-rank config/top200.txt, then fetch
+  python3 pipeline/fetch_stocks.py --rebuild           # no requests; cache only
 
 Note: Chinese string literals below are matched against response payloads
 (column headers, page labels). They are data and must not be translated.
@@ -56,8 +56,8 @@ import fetch_data as fd
 
 ROOT = fd.ROOT
 OUT_DIR = os.path.join(fd.DATA_DIR, "stocks")
-WATCHLIST = os.path.join(ROOT, "stocks.txt")
-TOPLIST = os.path.join(ROOT, "top200.txt")
+WATCHLIST = os.path.join(ROOT, "config", "stocks.txt")
+TOPLIST = os.path.join(ROOT, "config", "top200.txt")
 DEFAULT_MONTHS = 24
 DEFAULT_BROKER_MONTHS = 12
 TOP_N, TOP_SESSIONS = 200, 60

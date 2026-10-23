@@ -3,7 +3,7 @@
  * Verification harness — checks the fetched data and the detection algorithm
  * against the acceptance criteria and the reference table in the spec.
  *
- *   node verify.js
+ *   node scripts/verify.js
  *
  * Runs the exact detect.js used by the dashboard, so a pass here means the page
  * is showing the same numbers.
@@ -12,11 +12,11 @@
 
 const fs = require("fs");
 const path = require("path");
-const { detectEpisodes } = require("./detect.js");
+const { detectEpisodes } = require("../web/js/detect.js");
 
-const DATA = path.join(__dirname, "data", "taiex-daily.json");
+const DATA = path.join(__dirname, "..", "web", "data", "taiex-daily.json");
 if (!fs.existsSync(DATA)) {
-  console.error("data/taiex-daily.json not found — run: python3 fetch_data.py");
+  console.error("web/data/taiex-daily.json not found — run: python3 pipeline/fetch_data.py");
   process.exit(1);
 }
 const rows = JSON.parse(fs.readFileSync(DATA, "utf8"));

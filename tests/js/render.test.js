@@ -18,8 +18,8 @@
 const fs = require("fs");
 const path = require("path");
 
-const PROJ = path.join(__dirname, "..");
-const read = p => fs.readFileSync(path.join(PROJ, p), "utf8");
+const WEB = path.join(__dirname, "..", "..", "web");
+const read = p => fs.readFileSync(path.join(WEB, p), "utf8");
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -90,8 +90,8 @@ function buildHtml(dataJs = read("data/taiex-daily.js")) {
     `<script>${echartsSrc}</script>`);
   html = html.replace('<script src="data/taiex-daily.js"></script>',
     `<script>${dataJs}</script>`);
-  html = html.replace('<script src="detect.js"></script>',
-    `<script>${read("detect.js")}</script>`);
+  html = html.replace('<script src="js/detect.js"></script>',
+    `<script>${read("js/detect.js")}</script>`);
 
   // jsdom has no canvas; ECharts' SVG renderer needs none.
   html = html.replace("renderer:'canvas'", "renderer:'svg'");
@@ -115,7 +115,7 @@ const spanOf = z => (typeof z.s === "number" && typeof z.e === "number")
  */
 function openEpisodeDataJs() {
   const vm = require("vm");
-  const { detectEpisodes } = require("../detect.js");
+  const { detectEpisodes } = require("../../web/js/detect.js");
   const sandbox = { window: {} };
   vm.runInNewContext(read("data/taiex-daily.js"), sandbox);
   const { TAIEX_DATA: data, TAIEX_META: meta } = sandbox.window;

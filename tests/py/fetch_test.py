@@ -12,7 +12,7 @@ Every test in this file runs fully offline:
     reach the network, the test fails loudly instead of hammering the real
     TWSE endpoints (which rate-limit aggressively).
 
-Run with:  python3 tests/fetch_test.py
+Run with:  python3 tests/py/fetch_test.py
 """
 
 import importlib.util
@@ -24,15 +24,15 @@ from unittest.mock import patch
 
 # --------------------------------------------------------------------------
 # Load the module under test (fetch_data.py is a plain script, not a
-# package, and lives one directory above this test file).
+# package, and lives in pipeline/ at the project root).
 # --------------------------------------------------------------------------
 
 TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.dirname(TESTS_DIR)
-MODULE_PATH = os.path.join(PROJECT_ROOT, "fetch_data.py")
+PIPELINE_DIR = os.path.join(os.path.dirname(os.path.dirname(TESTS_DIR)), "pipeline")
+MODULE_PATH = os.path.join(PIPELINE_DIR, "fetch_data.py")
 
-if PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, PROJECT_ROOT)
+if PIPELINE_DIR not in sys.path:
+    sys.path.insert(0, PIPELINE_DIR)
 
 _spec = importlib.util.spec_from_file_location("fetch_data", MODULE_PATH)
 fetch_data = importlib.util.module_from_spec(_spec)

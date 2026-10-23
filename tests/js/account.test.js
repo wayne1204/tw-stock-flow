@@ -73,7 +73,7 @@ module.exports = {
 
   async run(t) {
     const sqlite = require("node:sqlite");
-    const acc = await import(pathToFileURL(path.join(__dirname, "..", "lib", "account.mjs")).href);
+    const acc = await import(pathToFileURL(path.join(__dirname, "..", "..", "server", "account.mjs")).href);
     const { jwk, sign } = await signer();
     const other = await signer();                       // a key Google never published
     const env = { DB: d1(sqlite), GOOGLE_CLIENT_ID: CLIENT_ID };

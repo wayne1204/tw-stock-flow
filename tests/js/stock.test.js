@@ -11,8 +11,8 @@
 const fs = require("fs");
 const path = require("path");
 
-const PROJ = path.join(__dirname, "..");
-const read = p => fs.readFileSync(path.join(PROJ, p), "utf8");
+const WEB = path.join(__dirname, "..", "..", "web");
+const read = p => fs.readFileSync(path.join(WEB, p), "utf8");
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 function fixture() {
