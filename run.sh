@@ -18,8 +18,9 @@
 #                     Read from ./.env (gitignored) when present; not needed
 #                     where `wrangler login` has been run.
 #
-# Deploy uploads only the files in web/ the pages load (plus stock.html and
-# data/stocks/*.js once pipeline/fetch_stocks.py has run), staged into a temp dir.
+# Deploy uploads only the files in web/ the pages load (plus data/stocks/*.js once
+# pipeline/fetch_stocks.py has run, and data/market-backtest.js once
+# pipeline/build_market_backtest.js has), staged into a temp dir.
 # wrangler also compiles ./functions (the account API, see README) from the
 # repo root, where this script runs; its D1 binding and GOOGLE_CLIENT_ID are
 # set once in the Pages project settings.
@@ -52,7 +53,7 @@ deploy() {
   export PATH="$(dirname "$wrangler"):$PATH"
 
   # Paths are relative to web/, the site root.
-  local files=(index.html stock.html js/detect.js js/backtest.js data/taiex-daily.js) f
+  local files=(index.html stock.html backtest.html js/detect.js js/backtest.js data/taiex-daily.js) f
   for f in "${files[@]}"; do
     [[ -s "web/$f" ]] || { echo "run.sh deploy: missing web/$f (run python3 pipeline/fetch_data.py)" >&2; exit 1; }
   done
@@ -63,6 +64,8 @@ deploy() {
   # fetch_stocks.py" notice instead.
   if [[ -s web/data/stocks/index.js ]]; then
     files+=($(cd web && echo data/stocks/*.js))
+    # backtest.html shows its own "run build_market_backtest.js" notice without it
+    if [[ -s web/data/market-backtest.js ]]; then files+=(data/market-backtest.js); fi
   else
     echo "run.sh deploy: WARNING no web/data/stocks/ (run python3 pipeline/fetch_stocks.py); stock.html ships without data" >&2
   fi
@@ -78,7 +81,7 @@ deploy() {
   # and hidden, everywhere else: locally, over file:// and in the bundle).
   local stamp
   stamp="部署於 $(TZ=Asia/Taipei date '+%Y-%m-%d %H:%M')（台北時間）· $(git rev-parse --short HEAD)"
-  sed -i "s|<!--DEPLOYED-->|$stamp|" "$STAGE/index.html" "$STAGE/stock.html"
+  sed -i "s|<!--DEPLOYED-->|$stamp|" "$STAGE/index.html" "$STAGE/stock.html" "$STAGE/backtest.html"
 
   # First deploy: create the project. "Already exists" is the normal case after.
   # --force keeps it a classic Pages project; wrangler 4.148+ otherwise hands

@@ -10,6 +10,8 @@
 #   scripts/update_data.sh --quiet          Log only; do not echo progress to stdout
 #
 # Environment:
+#   NODE    node for pipeline/build_market_backtest.js (default: node on PATH,
+#           else the newest ~/.nvm version)
 #   PYTHON  interpreter to use (default: python3 on PATH, else /usr/bin/python3).
 #           It needs `requests`; both pythons on this box have it.
 #   LOG     log file (default: <repo>/fetch.log, rotated at 5 MB, one .1 kept).
@@ -102,6 +104,15 @@ fi
 if [[ -s config/stocks.txt ]]; then
   if "$PYTHON" pipeline/fetch_stocks.py >>"$LOG" 2>&1; then
     say "  watchlist stocks refreshed"
+    # backtest.html's whole-market summary, rebuilt from the refreshed files.
+    # Cron's PATH has no nvm, so fall back to the newest nvm node.
+    NODE="${NODE:-$(command -v node || ls -1d "$HOME"/.nvm/versions/node/*/bin/node 2>/dev/null | sort -V | tail -n 1 || true)}"
+    if [[ -n "$NODE" ]] && "$NODE" pipeline/build_market_backtest.js >>"$LOG" 2>&1; then
+      say "  market backtest rebuilt"
+    else
+      say "  WARNING: build_market_backtest.js failed (see $LOG)"
+      echo "update_data.sh: build_market_backtest.js failed; backtest.html keeps its last summary" >&2
+    fi
   else
     say "  WARNING: fetch_stocks.py exited non-zero (see $LOG)"
     echo "update_data.sh: fetch_stocks.py failed; market data still updated" >&2

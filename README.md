@@ -2,12 +2,14 @@
 
 **線上版：<https://tw-stock-flow.pages.dev>**
 
-追蹤台股的資金流向，分兩頁：
+追蹤台股的資金流向，分三頁：
 
 - **大盤**（`index.html`）：自 2017 年以來加權指數的每一次修正波段（峰谷法偵測），疊上成交金額、
   三大法人買賣超與融資餘額。
 - **個股籌碼**（`stock.html`）：所有上市櫃股票與 ETF 的日 K、三大法人、融資、股東結構；
   觀察清單與成交值前 200 名另有主力買賣超與券商分點。
+- **全市場回測**（`backtest.html`）：個股頁回測面板的籌碼因子，彙總到全部上市櫃股票：
+  個股 IC 分布、五分位平均報酬、逐月的橫斷面 IC。
 
 資料全部來自證交所、櫃買中心等公開來源；**不使用任何模擬資料**，抓不到就報錯、網頁拒絕渲染。
 
@@ -16,6 +18,7 @@
 ```
 pipeline/fetch_data.py     →   web/data/taiex-daily.{json,js}   →   web/index.html
 pipeline/fetch_stocks.py   →   web/data/stocks/*.js             →   web/stock.html
+pipeline/build_market_backtest.js → web/data/market-backtest.js →   web/backtest.html
 ```
 
 > 程式碼與註解一律使用英文，介面與本文件使用中文。
@@ -41,7 +44,8 @@ pipeline/fetch_stocks.py   →   web/data/stocks/*.js             →   web/stoc
 ```
 
 旗標：`--bundle` 重打包、`--commit` 資料有變才 commit、`--deploy` 發佈、`--start YYYY-MM`
-限縮抓取範圍。部署只上傳 `web/` 底下頁面用到的檔案（`index.html`、`stock.html`、`js/detect.js`、`js/backtest.js`、`data/` 輸出）；
+限縮抓取範圍。個股更新成功後會接著以 node 重建全市場回測（`NODE` 可指定路徑）。
+部署只上傳 `web/` 底下頁面用到的檔案（三個頁面、`js/detect.js`、`js/backtest.js`、`data/` 輸出）；
 專案名稱可用 `CF_PAGES_PROJECT` 覆寫。
 
 ## 資料來源
@@ -124,12 +128,13 @@ echo 2317 >> config/stocks.txt                     # 把股票加入觀察清單
 
 個股頁最下方的「回測」面板（預設收合，展開才計算）是**事件研究**，不是交易策略：對每個籌碼因子，
 看它和此股往後報酬的歷史關聯。全部在瀏覽器裡由 `web/js/backtest.js` 計算，用的是頁面已載入的還原 K 線。
+因子一律依下表順序列出（不依 IC 排序），全市場回測頁亦同。
 
 | 因子 | 定義（L = 因子累計天數，預設 5） | 頻率 |
 |---|---|---|
-| 外資、投信 | 近 L 日買賣超 ÷ 前 20 日均量 | 日 |
-| 量能變化 | 當日成交量 ÷ 前 20 日均量 | 日 |
 | 均線位置 | 收盤 ÷ MA20 − 1（可切 MA5 / MA60） | 日 |
+| 量能變化 | 當日成交量 ÷ 前 20 日均量 | 日 |
+| 外資、投信 | 近 L 日買賣超 ÷ 前 20 日均量 | 日 |
 | 融資 | 融資餘額近 L 日增減 % | 日 |
 | 主力 | 近 L 日主力買賣超 ÷ 前 20 日均量（僅追蹤股） | 日 |
 | 股東人數變化、大戶持股比變化 | 集保總股東人數週增減 %、> 400 張持股比週增減（百分點） | 週 |
@@ -142,6 +147,18 @@ echo 2317 >> config/stocks.txt                     # 把股票加入觀察清單
 - 缺資料的日子只從該因子剔除；沒有資料的因子（ETF 無集保、非追蹤股無主力）不列出。
 - 刻意**不顯示**今日因子落在哪個分位，也沒有日期區間選擇：面板只描述歷史關聯，不構成投資建議。
 - 歷史深度：日資料自 2022-01 起（`--start`）；主力只回補近 12 個月；集保頁本身只有約 3 年。
+
+### 全市場回測（`backtest.html`）
+
+`node pipeline/build_market_backtest.js` 讀取全部 `web/data/stocks/*.js`（不含 00 開頭的 ETF）與
+加權指數，以同一個 `backtest.js` 算出 `web/data/market-backtest.js`（約 60 KB，約 2 分鐘、1 GB 記憶體）。
+因子累計天數固定 5 日、均線 MA20；頁面可切持有天數與原始 / 相對加權指數。
+
+- **個股 IC 分布**：每檔股票各自的 IC（有效樣本 < 10 的不計），箱形圖畫 10 / 25 / 50 / 75 / 90 百分位與平均。
+- **五分位平均報酬**：每檔股票依自身因子值分五等分，各分位往後報酬的全市場平均；每張小圖刻度不同。
+- **橫斷面 IC**：每個交易日把所有股票（至少 30 檔）的因子值與往後報酬做排名相關，按月平均成熱圖，
+  看關係是否只出現在某段行情。
+- 主力只有追蹤股、近 12 個月，數字受那一年的行情影響大；與個股頁相同，只描述歷史，不構成投資建議。
 
 ## 帳號與自選（Google 登入）
 
@@ -184,6 +201,8 @@ npm test      # 全部；node tests/js/run.js detect 只跑名稱含 detect 的�
 |---|---|
 | `tests/js/detect.test.js` | 演算法規則，跑在手工序列上 |
 | `tests/js/backtest.test.js` | 個股回測：進場規則、IC、五分位、有效樣本、因子定義 |
+| `tests/js/market.test.js` | 全市場回測的彙總，以及在 jsdom 中實際執行 `backtest.html` |
+| `tests/js/deploy.test.js` | 部署清單涵蓋頁面載入的腳本、頁尾部署戳記、三頁分頁列 |
 | `tests/py/fetch_test.py` | 抓取腳本的解析與快取（不連網） |
 | `tests/py/stock_fetch_test.py` | 個股抓取的解析（不連網） |
 | `tests/js/stock.test.js` | 在 jsdom 中實際執行 `stock.html`（含模擬 API 的登入 / 自選流程） |
@@ -198,13 +217,15 @@ npm test      # 全部；node tests/js/run.js detect 只跑名稱含 detect 的�
 web/                 網站本體（部署根目錄，也可直接 file:// 開啟）
   index.html         大盤儀表板（CDN 載入 ECharts）
   stock.html         個股籌碼頁
+  backtest.html      全市場回測頁
   js/detect.js       修正波段偵測（網頁與 verify.js 共用）
-  js/backtest.js     個股籌碼因子回測（stock.html 與測試共用）
-  data/              抓取輸出：taiex-daily.{json,js}、stocks/、raw/ 快取
+  js/backtest.js     籌碼因子回測與除權還原（stock.html、全市場彙總與測試共用）
+  data/              抓取輸出：taiex-daily.{json,js}、stocks/、market-backtest.js、raw/ 快取
 pipeline/            Python 資料管線
   fetch_data.py      大盤抓取 + 快取 + 合併
   fetch_stocks.py    個股抓取
   bundle.py          打包單檔離線 HTML
+  build_market_backtest.js  全市場回測彙總（node）
 config/              stocks.txt 觀察清單、top200.txt 成交值前 200
 functions/api/       Pages Functions：登入、自選 API（實作在 server/account.mjs）
 server/              帳號後端

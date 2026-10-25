@@ -7,6 +7,8 @@ web/data/raw/
 # that runs the fetch (run.sh deploy uploads them from disk), so they never
 # need to be in git. Rebuild with `python3 pipeline/fetch_stocks.py`.
 web/data/stocks/
+# Built from them by pipeline/build_market_backtest.js
+web/data/market-backtest.js
 
 # Build artifacts of the fetcher
 fetch.log

@@ -112,23 +112,19 @@ module.exports = {
       const res = run(cyclic(150), [], { horizon: 1, lookback: 5, ma: 20 });
       t.eq("a long enough stock is ok", res.status, "ok");
       const keys = res.factors.map(f => f.key);
-      t.eq("the factor that leads the return ranks first", keys[0], "volume");
-      t.near("its IC is 1", res.factors[0].ic, 1, 1e-12);
-      t.eq("every factor value with a forward return is paired", res.factors[0].n, 129);
-      t.ok("factors without data are left out", !keys.includes("mainForce") && !keys.includes("holders"),
-           keys.join(","));
-      t.eq("factors with no IC sort last", keys.slice(-3).sort(), ["foreign", "margin", "trust"]);
+      const vol = res.factors.find(f => f.key === "volume");
+      t.near("the factor that leads the return has IC 1", vol.ic, 1, 1e-12);
+      t.eq("every factor value with a forward return is paired", vol.n, 129);
+      t.eq("factors keep the fixed display order; those without data are left out",
+           keys, ["ma", "volume", "foreign", "trust", "margin"]);
     }
     {
       // Six weekly rows → five changes: scored (they rank perfectly) but far too few to trust
       const rows = cyclic(150);
       const holders = [0, 1, 2, 3, 4, 5].map(k => ({ date: rows[100 + k * 5].date, holders: 1000 + k * k, big400Pct: 50 + k }));
       const res = run(rows, holders, { horizon: 5, lookback: 5, ma: 20 });
-      const st = res.factors.map(f => `${f.key}:${f.status}`);
       t.eq("thin weekly factors are still listed, as insufficient",
            res.factors.filter(f => f.weekly).map(f => f.status), ["insufficient", "insufficient"]);
-      t.ok("insufficient factors sort after every other one",
-           st.slice(-2).every(x => x.endsWith(":insufficient")), st.join(" "));
     }
     t.eq("a stock with under 120 sessions is too short", run(cyclic(119), [], { horizon: 5, lookback: 5, ma: 20 }),
          { status: "short", days: 119, factors: [] });

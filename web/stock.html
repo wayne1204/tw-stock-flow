@@ -79,7 +79,7 @@
   .tabs svg{flex:0 0 auto}
   @media (max-width: 720px){
     .tabs{width:100%;margin-bottom:12px}
-    .tabs a{flex:1;justify-content:center;padding:8px 10px;font-size:14px}
+    .tabs a{flex:1;justify-content:center;padding:8px 6px;font-size:13px;gap:5px}
   }
   .controls{display:flex;flex-wrap:wrap;gap:18px;align-items:center}
   .ctrl-label{color:var(--ink-3);font-size:11px;text-transform:uppercase;letter-spacing:.06em;
@@ -248,7 +248,7 @@
 <body>
 <div class="wrap">
 
-  <nav class="tabs" aria-label="頁面"><a href="index.html"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1.5 12.5 6 7l3 3 5.5-6.5"/></svg>大盤修正波段</a><a href="stock.html" aria-current="page"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M5 1.5v13M11 3.5v9"/><rect x="3" y="4.5" width="4" height="6" rx=".6" fill="currentColor"/><rect x="9" y="6" width="4" height="4" rx=".6"/></svg>個股籌碼</a></nav>
+  <nav class="tabs" aria-label="頁面"><a href="index.html"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1.5 12.5 6 7l3 3 5.5-6.5"/></svg>大盤修正波段</a><a href="stock.html" aria-current="page"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M5 1.5v13M11 3.5v9"/><rect x="3" y="4.5" width="4" height="6" rx=".6" fill="currentColor"/><rect x="9" y="6" width="4" height="4" rx=".6"/></svg>個股籌碼</a><a href="backtest.html"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M1.5 14.5h13"/><path d="M4 12V9M8 12V3.5M12 12V6.5"/></svg>全市場回測</a></nav>
 
   <div class="layout" id="layout">
   <!-- Shown only where the site has accounts (the deployed Pages project
@@ -350,23 +350,23 @@
       </div>
     </div>
 
-    <div class="panel">
-      <div class="panel-head">
+    <details class="panel" id="br" open>
+      <summary class="panel-head">
         <h2>主力進出 · 券商分點</h2>
         <div class="seg" id="seg-period" role="group" aria-label="分點統計期間">
           <button data-v="1" aria-pressed="true">近 1 日</button>
           <button data-v="5">近 5 日</button>
           <button data-v="20">近 20 日</button>
         </div>
-      </div>
+      </summary>
       <div class="br-sum num" id="br-sum"></div>
       <div class="brokers num" id="brokers"></div>
-    </div>
+    </details>
 
     <details class="panel" id="bt">
       <summary class="panel-head">
         <h2>回測 · 籌碼因子與後續報酬</h2>
-        <span class="hint">各因子與此股往後報酬的歷史關聯，依 |IC| 排序 · 點列可展開五分位</span>
+        <span class="hint">各因子與此股往後報酬的歷史關聯，點列可展開五分位</span>
       </summary>
       <div class="bt-ctrls">
         <div><span class="ctrl-label">持有天數</span>
@@ -521,27 +521,9 @@
   }
 
   // ── Derived series ────────────────────────────────────────
-  // A split or capital reduction resumes trading at a reference price, not
-  // the last close. Sessions before it are rescaled to today's terms (price
-  // ÷ close/reference, volume × the same), so the K chart has no cliff;
-  // each such row keeps the traded figures in `raw` for the tooltip.
-  // `chips` rescales the lot-denominated chip fields the same way (the
-  // backtest compares them across the event); the chart shows them as reported.
-  const CHIP_LOTS = ['foreign','trust','dealer','mainForce','marginBalance','marginChange'];
-  function restore(s, chips){
-    const ev = s.adjustments || [];
-    if(!ev.length) return s.daily;
-    const px = (v, f) => has(v) ? +(v / f).toFixed(4) : v;
-    const lots = (v, f) => has(v) ? Math.round(v * f) : v;
-    return s.daily.map(r=>{
-      const f = ev.reduce((a,e)=> r.date < e.date ? a * e.ratio : a, 1);
-      if(f === 1) return r;
-      const out = {...r, open:px(r.open,f), high:px(r.high,f), low:px(r.low,f),
-        close:px(r.close,f), volume:lots(r.volume,f), raw:r};
-      if(chips) for(const k of CHIP_LOTS) out[k] = lots(r[k], f);
-      return out;
-    });
-  }
+  // Split-adjusted rows (see backtest.js): the K chart has no cliff at a
+  // split, and each rescaled row keeps the traded figures in `raw`.
+  const restore = StockBacktest.restore;
   function derive(s){
     const rows = restore(s);
     const dates = rows.map(r=>r.date);
@@ -896,6 +878,8 @@
   }
   seg('seg-range', v=>{ range = +v; if(S) chart.dispatchAction({type:'dataZoom', ...zoomOpt()}); });
   seg('seg-period', v=>{ period = v; if(S) renderBrokers(); });
+  // The period buttons sit in the 主力 panel's summary: picking one must not fold it
+  document.getElementById('seg-period').addEventListener('click', e=>e.preventDefault());
 
 
   // ── 回測 ──────────────────────────────────────────────────

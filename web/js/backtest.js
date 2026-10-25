@@ -14,6 +14,30 @@
   const has = v => v !== null && v !== undefined && !Number.isNaN(v);
 
   /**
+   * A split or capital reduction resumes trading at a reference price, not
+   * the last close. Sessions before it are rescaled to today's terms (price
+   * ÷ close/reference, volume × the same); each such row keeps the traded
+   * figures in `raw`. `chips` rescales the lot-denominated chip fields the
+   * same way (the backtest compares them across the event); the chart shows
+   * them as reported.
+   */
+  const CHIP_LOTS = ["foreign", "trust", "dealer", "mainForce", "marginBalance", "marginChange"];
+  function restore(s, chips) {
+    const ev = s.adjustments || [];
+    if (!ev.length) return s.daily;
+    const px = (v, f) => has(v) ? +(v / f).toFixed(4) : v;
+    const lots = (v, f) => has(v) ? Math.round(v * f) : v;
+    return s.daily.map(r => {
+      const f = ev.reduce((a, e) => r.date < e.date ? a * e.ratio : a, 1);
+      if (f === 1) return r;
+      const out = { ...r, open: px(r.open, f), high: px(r.high, f), low: px(r.low, f),
+                    close: px(r.close, f), volume: lots(r.volume, f), raw: r };
+      if (chips) for (const k of CHIP_LOTS) out[k] = lots(r[k], f);
+      return out;
+    });
+  }
+
+  /**
    * Forward return for each session. Chip data for day t is published after
    * the close, so the first price anyone could trade on it is day t+1's open;
    * the position is closed at day t+N's close. With `market` (TAIEX rows),
@@ -92,11 +116,13 @@
 
   // `def` is the formula as the panel prints it, for the chosen L and MA
   const flowDef = o => `近 ${o.lookback} 日買賣超 ÷ 前 20 日均量`;
+  // Display order everywhere (stock panel, market page): price first, then
+  // flows, then the weekly TDCC pair
   const FACTORS = [
+    { key: "ma", label: "均線位置", def: o => `收盤 ÷ MA${o.ma} − 1` },
+    { key: "volume", label: "量能變化", def: () => "當日成交量 ÷ 前 20 日均量" },
     { key: "foreign", label: "外資", def: flowDef },
     { key: "trust", label: "投信", def: flowDef },
-    { key: "volume", label: "量能變化", def: () => "當日成交量 ÷ 前 20 日均量" },
-    { key: "ma", label: "均線位置", def: o => `收盤 ÷ MA${o.ma} − 1` },
     { key: "margin", label: "融資", def: o => `融資餘額近 ${o.lookback} 日增減 %` },
     { key: "mainForce", label: "主力", def: o => `近 ${o.lookback} 日主力買賣超 ÷ 前 20 日均量` },
     // TDCC dates a week by its last business day and publishes it that
@@ -110,7 +136,7 @@
    * (after its close). A window with any missing input yields no point rather
    * than a partial sum.
    *
-   * @param rows     split-adjusted daily rows (stock.html's restore())
+   * @param rows     split-adjusted daily rows (restore(stock, true))
    * @param holders  weekly TDCC rows
    * @param opts     { lookback: L, ma: 5 | 20 | 60 }
    */
@@ -181,8 +207,7 @@
 
   /**
    * The whole panel: every factor that has data, paired with its forward
-   * return and summarized, strongest |IC| first. Insufficient factors and
-   * factors without an IC sort last.
+   * return and summarized, in FACTORS order.
    *
    * @param opts  { horizon, lookback, ma, market? }  market = TAIEX rows for
    *              returns relative to the index
@@ -198,10 +223,8 @@
       factors.push({ key: f.key, label: f.label, def: f.def, weekly: f.weekly,
                      ...summarize(xs, ys, { horizon: opts.horizon, weekly: f.weekly }) });
     }
-    const tier = f => f.status === "insufficient" ? 2 : has(f.ic) ? 0 : 1;
-    factors.sort((a, b) => tier(a) - tier(b) || Math.abs(b.ic || 0) - Math.abs(a.ic || 0));
     return { status: "ok", days: rows.length, factors };
   }
 
-  return { forwardReturns, spearman, summarize, factorSeries, run };
+  return { FACTORS, restore, forwardReturns, spearman, summarize, factorSeries, run };
 });

@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>全市場回測 · TW Stock Flow</title>
+<!-- Inline so the icon survives file:// and the deploy: one red and one green candle. -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231a1a19'/%3E%3Cpath d='M11 5V27M21 8V24' stroke='%238a897e' stroke-width='1.5'/%3E%3Crect x='7' y='10' width='8' height='12' rx='1' fill='%23e66767'/%3E%3Crect x='17' y='12' width='8' height='8' rx='1' fill='%231baf7a'/%3E%3C/svg%3E">
+<script>
+  // Before first paint, so a saved light theme never flashes dark. Shared by
+  // every page (same origin, same key).
+  (function(){ var t; try { t = localStorage.getItem('atlas-theme'); } catch(e) {}
+    document.documentElement.dataset.theme = t === 'light' ? 'light' : 'dark'; })();
+</script>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+<style>
+  :root{
+    --bg:#12120f; --surface:#1a1a19; --surface-2:#232320; --line:#33332e;
+    --ink:#f0efec; --ink-2:#c3c2b7; --ink-3:#8a897e; --ink-4:#4a4a44; --line-2:#26261f;
+    /* Taiwan market convention: RED = up, GREEN = down. Here red marks a
+       factor whose high values went with higher later returns. */
+    --c-up:#e66767; --c-down:#1baf7a; --c-mid:#33332e;
+    --err-bg:#2b1a1a; --err-line:#5a2a2a; --err-ink:#f0c0c0;
+    color-scheme:dark;
+  }
+  :root[data-theme="light"]{
+    --bg:#f6f5f1; --surface:#ffffff; --surface-2:#efeee8; --line:#dddbd2;
+    --ink:#1b1b18; --ink-2:#45443e; --ink-3:#6f6e65; --ink-4:#b9b8ae; --line-2:#eeede7;
+    --c-up:#d13c3c; --c-down:#0e8a5c; --c-mid:#e6e4dc;
+    --err-bg:#fdeeee; --err-line:#f0c4c4; --err-ink:#8a2222;
+    color-scheme:light;
+  }
+  *{box-sizing:border-box}
+  [hidden]{display:none !important}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"Inter","Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+    font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased;
+  }
+  .num{font-variant-numeric:tabular-nums; font-feature-settings:"tnum" 1}
+  .wrap{max-width:1500px;margin:0 auto;padding:20px 22px 60px}
+
+  header{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;justify-content:space-between;
+    padding-bottom:16px;border-bottom:1px solid var(--line);margin-bottom:20px}
+  h1{font-size:20px;font-weight:600;margin:0;letter-spacing:-.01em}
+  .sub{color:var(--ink-3);font-size:12.5px;margin-top:4px}
+  .tabs{display:flex;gap:4px;margin:0 0 16px;padding:4px;width:max-content;max-width:100%;
+    background:var(--surface);border:1px solid var(--line);border-radius:10px}
+  .tabs a{display:inline-flex;align-items:center;gap:7px;padding:8px 18px;border-radius:7px;
+    color:var(--ink-2);text-decoration:none;font-size:14.5px;font-weight:500;white-space:nowrap;
+    transition:background .12s,color .12s}
+  .tabs a:hover{color:var(--ink);background:var(--surface-2)}
+  .tabs a[aria-current="page"]{color:var(--ink);background:var(--surface-2);
+    box-shadow:inset 0 0 0 1px var(--line), inset 0 -2px 0 var(--c-up)}
+  .tabs a:focus-visible{outline:2px solid var(--ink-3);outline-offset:1px}
+  .tabs svg{flex:0 0 auto}
+  .controls{display:flex;flex-wrap:wrap;gap:18px;align-items:center}
+  .ctrl-label{color:var(--ink-3);font-size:11px;text-transform:uppercase;letter-spacing:.06em;
+    display:block;margin-bottom:5px}
+  .seg{display:inline-flex;background:var(--surface);border:1px solid var(--line);border-radius:7px;padding:2px}
+  .seg button{
+    appearance:none;border:0;background:transparent;color:var(--ink-2);
+    padding:5px 11px;font-size:13px;border-radius:5px;cursor:pointer;
+    font-variant-numeric:tabular-nums;font-family:inherit;transition:background .12s,color .12s}
+  .seg button:hover{color:var(--ink)}
+  .seg button[aria-pressed="true"]{background:var(--surface-2);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line)}
+  .btn{appearance:none;border:1px solid var(--line);background:var(--surface);color:var(--ink-2);
+    padding:5px 10px;border-radius:7px;font-size:13px;cursor:pointer;font-family:inherit;line-height:1.3}
+  .btn:hover{color:var(--ink);border-color:var(--ink-4)}
+
+  .read{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}
+  .read div{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 15px;
+    color:var(--ink-2);font-size:12.5px;line-height:1.65}
+  .read b{display:block;color:var(--ink);font-size:13px;margin-bottom:3px}
+
+  .panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 6px 4px;margin-bottom:20px}
+  .panel-head{display:flex;justify-content:space-between;align-items:center;gap:6px 12px;
+    flex-wrap:wrap;padding:6px 10px 10px}
+  h2{font-size:15px;font-weight:600;margin:0}
+  .hint{color:var(--ink-3);font-size:12px}
+  .chart{width:100%}
+  .key{display:flex;flex-wrap:wrap;gap:14px;padding:2px 14px 10px;color:var(--ink-3);font-size:12px}
+  .key span{display:inline-flex;align-items:center;gap:6px}
+  .dot{width:9px;height:9px;border-radius:2px;display:inline-block}
+  .ramp{width:120px;height:9px;border-radius:2px;display:inline-block;
+    background:linear-gradient(90deg,var(--c-down),var(--c-mid),var(--c-up))}
+
+  table{border-collapse:collapse;width:100%;font-size:13px}
+  th,td{padding:7px 10px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--line-2)}
+  th{color:var(--ink-3);font-weight:500;font-size:11.5px;background:var(--surface-2)}
+  th:first-child,td:first-child{text-align:left}
+  tbody tr:last-child td{border-bottom:0}
+  td .def{display:block;color:var(--ink-3);font-size:11.5px;white-space:normal}
+  .tbl{border:1px solid var(--line);border-radius:8px;overflow-x:auto;margin:0 10px 10px}
+  .neg{color:var(--c-down)} .pos{color:var(--c-up)}
+  .muted{color:var(--ink-3)}
+
+  footer{color:var(--ink-3);font-size:12px;margin-top:26px;line-height:1.7}
+  footer .deployed:empty{display:none}
+  code{background:var(--surface-2);padding:1.5px 5px;border-radius:4px;font-size:12px}
+  .err{background:var(--err-bg);border:1px solid var(--err-line);color:var(--err-ink);padding:18px 20px;
+    border-radius:10px;line-height:1.7}
+  @media (max-width: 900px){ .read{grid-template-columns:1fr} }
+  @media (max-width: 720px){
+    .wrap{padding:14px 12px 40px}
+    .tabs{width:100%;margin-bottom:12px}
+    .tabs a{flex:1;justify-content:center;padding:8px 6px;font-size:13px;gap:5px}
+    h1{font-size:17px}
+    header{gap:12px;padding-bottom:12px;margin-bottom:14px}
+    .controls{gap:10px 14px;width:100%}
+    .seg button{padding:6px 9px;font-size:12.5px}
+    .panel{padding:4px 2px 2px}
+    th,td{padding:5px 6px;font-size:12px}
+    .tbl{margin:0 4px 8px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="tabs" aria-label="頁面"><a href="index.html"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1.5 12.5 6 7l3 3 5.5-6.5"/></svg>大盤修正波段</a><a href="stock.html"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M5 1.5v13M11 3.5v9"/><rect x="3" y="4.5" width="4" height="6" rx=".6" fill="currentColor"/><rect x="9" y="6" width="4" height="4" rx=".6"/></svg>個股籌碼</a><a href="backtest.html" aria-current="page"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M1.5 14.5h13"/><path d="M4 12V9M8 12V3.5M12 12V6.5"/></svg>全市場回測</a></nav>
+
+  <header>
+    <div>
+      <h1>全市場回測 · 籌碼因子與後續報酬</h1>
+      <div class="sub num" id="meta">載入中…</div>
+    </div>
+    <div class="controls">
+      <div><span class="ctrl-label">持有天數</span>
+        <div class="seg" id="seg-h" role="group" aria-label="持有天數">
+          <button data-v="5">5 日</button><button data-v="20" aria-pressed="true">20 日</button><button data-v="60">60 日</button>
+        </div></div>
+      <div><span class="ctrl-label">報酬</span>
+        <div class="seg" id="seg-rel" role="group" aria-label="報酬基準">
+          <button data-v="raw" aria-pressed="true">原始</button><button data-v="rel">相對加權指數</button>
+        </div></div>
+      <div><span class="ctrl-label">&nbsp;</span>
+        <button class="btn" id="btn-theme" aria-label="切換深淺色">淺色</button></div>
+    </div>
+  </header>
+
+  <div id="app" hidden>
+    <div class="read">
+      <div><b>IC 是什麼</b>因子值與往後報酬的排名相關係數，−1 到 +1。正值：因子愈高，之後報酬愈高；負值相反；0 為無關。
+        個股報酬的 |IC| 超過 0.05 已算明顯。</div>
+      <div><b>個股 IC</b>每檔股票用自己的歷史各算一個 IC（同個股頁的回測面板），再看全市場的分布：
+        多數股票落在同一側，關係才算普遍。</div>
+      <div><b>橫斷面 IC</b>每個交易日比較所有股票：當天因子較高的股票，之後是否漲得較多。按月平均，
+        看關係是否穩定，或只出現在某段行情。</div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h2>個股 IC 分布</h2>
+        <span class="hint">每檔股票一個 IC · 箱為 25–75%，鬚為 10–90%，線為中位數，點為平均</span>
+      </div>
+      <div class="chart" id="c-ic"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h2>五分位平均報酬</h2>
+        <span class="hint">每檔股票依自身因子值分五等分（Q1 最低 → Q5 最高），各分位往後報酬的全市場平均 · 各圖刻度不同</span>
+      </div>
+      <div class="chart" id="c-q"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h2>橫斷面 IC · 月平均</h2>
+        <span class="hint">每日跨股票的 IC，按訊號日所在月份平均 · 空白為該月無資料</span>
+      </div>
+      <div class="chart" id="c-xs"></div>
+      <div class="key"><span><i class="ramp"></i>綠：負 IC · 紅：正 IC（±0.15 以上同色）</span></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>彙總</h2><span class="hint" id="t-hint"></span></div>
+      <div class="tbl"><table id="t-sum" class="num"></table></div>
+    </div>
+
+    <footer>
+      <p id="note"></p>
+      <p>本頁僅描述歷史關聯，不構成投資建議，亦不產生買賣訊號；因子目前的數值不在此呈現。</p>
+      <p class="deployed"><!--DEPLOYED--></p>
+    </footer>
+  </div>
+
+  <div id="error" class="err" hidden></div>
+</div>
+
+<script src="data/market-backtest.js"></script>
+<script>
+(function(){
+  "use strict";
+
+  const D = window.MARKET_BACKTEST;
+  if(!D){
+    const e = document.getElementById('error');
+    e.innerHTML = '<strong>找不到全市場回測資料。</strong><br>請先執行 <code>python3 pipeline/fetch_stocks.py</code>，' +
+      '再執行 <code>node pipeline/build_market_backtest.js</code> 產生 <code>data/market-backtest.js</code>。';
+    e.hidden = false;
+    document.getElementById('meta').textContent = '';
+    return;
+  }
+
+  const CSS = getComputedStyle(document.documentElement);
+  const C = k => CSS.getPropertyValue(k).trim();
+  const COLORS = {};
+  function readColors(){ Object.assign(COLORS, {
+    up:C('--c-up'), down:C('--c-down'), mid:C('--c-mid'),
+    ink:C('--ink'), ink2:C('--ink-2'), ink3:C('--ink-3'), ink4:C('--ink-4'),
+    line:C('--line'), line2:C('--line-2'), surface:C('--surface'), surface2:C('--surface-2')
+  }); }
+  readColors();
+
+  const has = v => v!==null && v!==undefined && !Number.isNaN(v);
+  const nf  = (v,d=0) => has(v) ? v.toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d}) : '—';
+  const sgn = (v,d=0) => has(v) ? (v>0?'+':'') + nf(v,d) : '—';
+  const pct = (v,d=2) => has(v) ? sgn(v*100,d) + '%' : '—';
+  const cls = v => !has(v) || v===0 ? '' : v>0 ? 'pos' : 'neg';
+  const colorOf = v => !has(v) || v===0 ? COLORS.ink3 : v>0 ? COLORS.up : COLORS.down;
+  const fd = s => s ? s.replace(/-/g,'/') : '';
+
+  const view = {h:20, rel:false};
+  const factors = () => D.views[`${view.rel?'rel':'raw'}-${view.h}`] || [];
+  const narrow = () => document.getElementById('app').clientWidth < 720;
+
+  document.getElementById('meta').textContent =
+    `${nf(D.stocks)} 檔上市櫃股票（不含 ETF）· ${fd(D.span[0])} – ${fd(D.span[1])} · ` +
+    `因子累計 ${D.lookback} 日、均線 MA${D.ma} · 更新於 ${D.generatedAt.replace('T',' ')}`;
+  document.getElementById('app').hidden = false;
+
+  const charts = {};
+  const chartOf = id => charts[id] || (charts[id] = echarts.init(document.getElementById(id), null, {renderer:'canvas'}));
+  const sizeTo = (id, h) => {
+    const el = document.getElementById(id);
+    if(parseInt(el.style.height,10) !== h){ el.style.height = h + 'px'; chartOf(id).resize(); }
+  };
+  const tip = () => ({
+    trigger:'item', confine:true, backgroundColor:COLORS.surface, borderColor:COLORS.line,
+    textStyle:{color:COLORS.ink, fontSize:12}, extraCssText:'box-shadow:none;border-radius:8px;'
+  });
+  const row = (k, v) => `<div style="display:flex;justify-content:space-between;gap:16px">` +
+    `<span style="color:${COLORS.ink3}">${k}</span><span style="font-variant-numeric:tabular-nums">${v}</span></div>`;
+  const axisText = {color:COLORS.ink3, fontSize:11};
+  const zero = {silent:true, symbol:'none', data:[{xAxis:0}], lineStyle:{color:COLORS.ink4, width:1, type:'solid'}, label:{show:false}};
+
+  // ── 1. Per-stock IC distribution ─────────────────────────
+  function drawIC(){
+    const fs = factors(), n = narrow();
+    sizeTo('c-ic', 40 + fs.length * 44);
+    const labels = fs.map(f => f.label);
+    const ext = Math.max(0.2, ...fs.flatMap(f => f.box.map(v => Math.abs(v || 0)))) ;
+    const lim = Math.ceil(ext * 20) / 20;
+    chartOf('c-ic').setOption({
+      animation:false,
+      grid:{left:n?96:110, right:n?40:28, top:8, bottom:28},
+      tooltip:{...tip(), formatter:p=>{
+        const f = fs[p.dataIndex];
+        return `<div style="font-weight:600;margin-bottom:4px">${f.label}</div>` +
+          row('平均 IC', sgn(f.meanIC,3)) + row('中位數', sgn(f.box[2],3)) +
+          row('25–75%', `${sgn(f.box[1],3)} ~ ${sgn(f.box[3],3)}`) +
+          row('10–90%', `${sgn(f.box[0],3)} ~ ${sgn(f.box[4],3)}`) +
+          row('IC > 0 的股票', nf(f.posShare*100,0) + '%') + row('股票數', nf(f.stocks));
+      }},
+      xAxis:{type:'value', min:-lim, max:lim, axisLabel:{...axisText, formatter:v=>sgn(v,2)},
+        splitLine:{lineStyle:{color:COLORS.line2}}, axisLine:{show:false}},
+      yAxis:{type:'category', data:labels, inverse:true, axisTick:{show:false},
+        axisLine:{show:false}, axisLabel:{color:COLORS.ink2, fontSize:narrow()?11.5:12.5}},
+      series:[
+        {type:'boxplot', data:fs.map(f => f.box), boxWidth:[10,18],
+          itemStyle:{color:COLORS.surface2, borderColor:COLORS.ink3, borderWidth:1.2},
+          emphasis:{itemStyle:{borderColor:COLORS.ink, borderWidth:1.5}}, markLine:zero},
+        {type:'scatter', data:fs.map((f,i) => ({value:[f.meanIC, i], itemStyle:{color:colorOf(f.meanIC)}})),
+          symbolSize:10, itemStyle:{borderColor:COLORS.surface, borderWidth:2}, z:5,
+          label:{show:true, position:'right', distance:8, color:COLORS.ink2, fontSize:11,
+            formatter:p=>sgn(fs[p.dataIndex].meanIC,3)}}
+      ]
+    }, true);
+  }
+
+  // ── 2. Average quintile returns, one small chart per factor ──
+  function drawQ(){
+    const fs = factors(), n = narrow(), cols = n ? 2 : 4, rows = Math.ceil(fs.length / cols);
+    const cellH = 150, gapT = 30, top0 = 6;
+    sizeTo('c-q', top0 + rows * (cellH + gapT) + 6);
+    const w = 100 / cols;
+    // Each factor on its own scale: the shape across Q1→Q5 is the reading,
+    // and one factor's level (主力 covers a single year) must not flatten the rest
+    const limOf = f => {
+      const v = Math.max(0.005, ...f.quintiles.map(v => Math.abs(v || 0))) * 1.15;
+      const step = v <= 0.02 ? 0.005 : v <= 0.06 ? 0.01 : 0.05;
+      return Math.ceil(v / step) * step;
+    };
+    const grid = [], xAxis = [], yAxis = [], series = [], title = [];
+    fs.forEach((f, i) => {
+      const c = i % cols, r = Math.floor(i / cols);
+      const top = top0 + r * (cellH + gapT) + gapT;
+      grid.push({left:(c*w + (n?11:4.5))+'%', width:(w - (n?14:6.5))+'%', top, height:cellH - 26});
+      title.push({text:f.label, left:(c*w+(n?2:1.2))+'%', top:top - 24,
+        textStyle:{color:COLORS.ink2, fontSize:12.5, fontWeight:500}});
+      xAxis.push({type:'category', gridIndex:i, data:['Q1','Q2','Q3','Q4','Q5'], axisTick:{show:false},
+        axisLine:{lineStyle:{color:COLORS.ink4}}, axisLabel:{...axisText, fontSize:10.5}});
+      yAxis.push({type:'value', gridIndex:i, min:-limOf(f), max:limOf(f), interval:limOf(f),
+        axisLabel:{...axisText, fontSize:10, formatter:v=>sgn(v*100,1)+'%'},
+        splitLine:{lineStyle:{color:COLORS.line2}}});
+      series.push({type:'bar', xAxisIndex:i, yAxisIndex:i, barWidth:'52%',
+        data:f.quintiles.map(v => ({value:v, itemStyle:{color:colorOf(v),
+          borderRadius: has(v) && v < 0 ? [0,0,3,3] : [3,3,0,0]}})),
+        label:{show:!n, position:'top', color:COLORS.ink3, fontSize:10,
+          formatter:p=>has(p.value) ? sgn(p.value*100,1) : ''},
+        tooltip:{formatter:p=>`<div style="font-weight:600;margin-bottom:4px">${f.label} · ${p.name}</div>` +
+          row(`往後 ${view.h} 日平均報酬`, pct(p.value)) +
+          (p.dataIndex === 4 ? row('Q5 − Q1（中位數）', pct(f.spread)) + row('Q5 勝率', nf(f.hit*100,0)+'%') : '')}});
+    });
+    chartOf('c-q').setOption({animation:false, tooltip:tip(), title, grid, xAxis, yAxis, series}, true);
+  }
+
+  // ── 3. Cross-sectional IC by month, heatmap ──────────────
+  function drawXS(){
+    const fs = factors(), n = narrow();
+    const months = [...new Set(fs.flatMap(f => f.cross.months.map(m => m[0])))].sort();
+    sizeTo('c-xs', 36 + fs.length * (n ? 26 : 30));
+    const data = [];
+    fs.forEach((f, y) => f.cross.months.forEach(([m, v]) => data.push([months.indexOf(m), y, v])));
+    chartOf('c-xs').setOption({
+      animation:false,
+      grid:{left:n?96:110, right:n?8:16, top:6, bottom:28},
+      tooltip:{...tip(), formatter:p=>`<div style="font-weight:600;margin-bottom:4px">${fs[p.value[1]].label} · ${months[p.value[0]].replace('-','/')}</div>` +
+        row('橫斷面 IC（月平均）', sgn(p.value[2],3))},
+      xAxis:{type:'category', data:months, splitArea:{show:false}, axisTick:{show:false},
+        axisLine:{show:false}, axisLabel:{...axisText, interval:0,
+          formatter:(m, i)=> m.endsWith('-01') || i === 0 ? m.slice(0,4) : ''}},
+      yAxis:{type:'category', data:fs.map(f => f.label), inverse:true, axisTick:{show:false},
+        axisLine:{show:false}, axisLabel:{color:COLORS.ink2, fontSize:narrow()?11.5:12.5}},
+      visualMap:{show:false, min:-0.15, max:0.15, dimension:2, calculable:false,
+        inRange:{color:[COLORS.down, COLORS.mid, COLORS.up]}},
+      series:[{type:'heatmap', data, itemStyle:{borderColor:COLORS.surface, borderWidth:2, borderRadius:2},
+        emphasis:{itemStyle:{borderColor:COLORS.ink, borderWidth:1}}}]
+    }, true);
+  }
+
+  // ── 4. Table ──────────────────────────────────────────────
+  function drawTable(){
+    const fs = factors();
+    document.getElementById('t-hint').textContent =
+      `往後 ${view.h} 日 · ${view.rel ? '相對加權指數' : '原始報酬'}`;
+    const head = '<thead><tr><th>因子</th><th>平均 IC</th><th>IC &gt; 0 的股票</th><th>橫斷面 IC</th>' +
+      '<th>Q5 − Q1 中位數</th><th>Q5 勝率</th><th>股票數</th></tr></thead>';
+    const body = fs.map(f => `<tr data-key="${f.key}">` +
+      `<td data-col="label">${f.label}<span class="def">${f.def}</span></td>` +
+      `<td data-col="ic" class="${cls(f.meanIC)}">${sgn(f.meanIC,3)}</td>` +
+      `<td data-col="pos">${has(f.posShare) ? nf(f.posShare*100,0)+'%' : '—'}</td>` +
+      `<td data-col="xs" class="${cls(f.cross.meanIC)}">${sgn(f.cross.meanIC,3)}</td>` +
+      `<td data-col="spread" class="${cls(f.spread)}">${pct(f.spread)}</td>` +
+      `<td data-col="hit">${has(f.hit) ? nf(f.hit*100,0)+'%' : '—'}</td>` +
+      `<td data-col="n">${nf(f.stocks)}</td></tr>`).join('');
+    document.getElementById('t-sum').innerHTML = head + `<tbody>${body}</tbody>`;
+  }
+
+  function render(){
+    document.getElementById('note').textContent =
+      `報酬 = 訊號日（籌碼於收盤後公布）的次一交易日開盤進場、第 ${view.h} 個交易日收盤出場` +
+      (view.rel ? '，扣除同期加權指數報酬（上櫃股票亦同）' : '，原始報酬') +
+      `。個股統計沿用個股頁回測面板：每檔股票的有效樣本（n ÷ 持有天數）低於 10 的因子不計入；` +
+      `五分位以各股全樣本切分，用於描述過去，並非模擬交易。橫斷面 IC 需當日至少 30 檔股票同時有資料。` +
+      `主力僅追蹤清單內股票、約近 12 個月；股東人數與大戶持股比為每週集保資料，約自 2023 年中起。` +
+      `相鄰區間重疊，不提供顯著性檢定。`;
+    drawIC(); drawQ(); drawXS(); drawTable();
+  }
+
+  function seg(id, apply){
+    const box = document.getElementById(id);
+    box.addEventListener('click', e=>{
+      const b = e.target.closest('button'); if(!b) return;
+      box.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed', x===b ? 'true' : 'false'));
+      apply(b.dataset.v); render();
+    });
+  }
+  seg('seg-h', v=>{ view.h = +v; });
+  seg('seg-rel', v=>{ view.rel = v === 'rel'; });
+
+  let resizeT;
+  window.addEventListener('resize', ()=>{
+    clearTimeout(resizeT);
+    resizeT = setTimeout(()=>{ Object.values(charts).forEach(c=>c.resize()); render(); }, 150);
+  });
+
+  const themeBtn = document.getElementById('btn-theme');
+  const syncThemeBtn = () => {
+    const dark = document.documentElement.dataset.theme !== 'light';
+    themeBtn.textContent = dark ? '☀ 淺色' : '☾ 深色';
+    themeBtn.setAttribute('aria-pressed', dark ? 'false' : 'true');
+  };
+  syncThemeBtn();
+  themeBtn.addEventListener('click', ()=>{
+    const next = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem('atlas-theme', next); } catch(e) {}
+    syncThemeBtn(); readColors(); render();
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

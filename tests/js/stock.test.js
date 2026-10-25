@@ -143,6 +143,11 @@ module.exports = {
       t.ok("no 60-day window", !doc.querySelector('#seg-period button[data-v="60"]'));
       doc.querySelector('#seg-period button[data-v="20"]').click();
       t.ok("period without data says so", /沒有分點資料/.test(doc.getElementById("br-sum").textContent));
+      const br = doc.getElementById("br");
+      t.ok("主力 panel starts open and a period pick does not fold it", br.open);
+      br.querySelector("summary h2").click();
+      t.ok("clicking its title folds it", !br.open);
+      br.querySelector("summary h2").click();
 
       // ── Date box ──
       const pickDate = v => { const el = doc.getElementById("d-pick"); el.value = v;
@@ -287,6 +292,8 @@ async function backtestFlow(t) {
     t.ok("[回測] opening it scores every factor with data, 主力 included",
       ["foreign", "trust", "volume", "ma", "margin", "mainForce", "holders", "big400"].every(k => keys.includes(k)) &&
       !keys.includes("dealer"), keys.join(","));
+    t.eq("[回測] factors follow the fixed order", rows().map(r => r.dataset.key),
+      ["ma", "volume", "foreign", "trust", "margin", "mainForce", "holders", "big400"]);
     t.eq("[回測] defaults: 20 days, L 5, MA20, raw",
       [...doc.querySelectorAll("#bt [aria-pressed=true]")].map(b => b.dataset.v), ["20", "5", "20", "raw"]);
     t.ok("[回測] a thin weekly sample is greyed out as 樣本不足",
