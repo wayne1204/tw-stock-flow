@@ -74,6 +74,12 @@ deploy() {
     cp "web/$f" "$STAGE/$f"
   done
 
+  # Stamp the deploy time into each page's footer (<!--DEPLOYED--> stays empty,
+  # and hidden, everywhere else: locally, over file:// and in the bundle).
+  local stamp
+  stamp="部署於 $(TZ=Asia/Taipei date '+%Y-%m-%d %H:%M')（台北時間）· $(git rev-parse --short HEAD)"
+  sed -i "s|<!--DEPLOYED-->|$stamp|" "$STAGE/index.html" "$STAGE/stock.html"
+
   # First deploy: create the project. "Already exists" is the normal case after.
   # --force keeps it a classic Pages project; wrangler 4.148+ otherwise hands
   # creation to Workers, which fails without a Worker config.
