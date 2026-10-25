@@ -2,14 +2,20 @@
 
 **線上版：<https://tw-stock-flow.pages.dev>**
 
-自 2017 年以來加權指數的每一次修正波段（峰谷法偵測），疊上成交金額、三大法人買賣超與
-融資餘額。資料全部來自臺灣證券交易所公開 endpoint；**不使用任何模擬資料**，抓不到就報錯、
-網頁拒絕渲染。
+追蹤台股的資金流向，分兩頁：
+
+- **大盤**（`index.html`）：自 2017 年以來加權指數的每一次修正波段（峰谷法偵測），疊上成交金額、
+  三大法人買賣超與融資餘額。
+- **個股籌碼**（`stock.html`）：所有上市櫃股票與 ETF 的日 K、三大法人、融資、股東結構；
+  觀察清單與成交值前 200 名另有主力買賣超與券商分點。
+
+資料全部來自證交所、櫃買中心等公開來源；**不使用任何模擬資料**，抓不到就報錯、網頁拒絕渲染。
 
 ![儀表板截圖](docs/screenshot.png)
 
 ```
-pipeline/fetch_data.py   →   web/data/taiex-daily.{json,js}   →   web/index.html
+pipeline/fetch_data.py     →   web/data/taiex-daily.{json,js}   →   web/index.html
+pipeline/fetch_stocks.py   →   web/data/stocks/*.js             →   web/stock.html
 ```
 
 > 程式碼與註解一律使用英文，介面與本文件使用中文。
@@ -69,7 +75,7 @@ pipeline/fetch_data.py   →   web/data/taiex-daily.{json,js}   →   web/index.
 ## 個股籌碼監控（`stock.html`）
 
 **所有上市、上櫃股票與 ETF**（約 2,300 檔）皆可用代號或名稱搜尋，**不做波段 / 回撤分析**，只呈現籌碼。
-`config/stocks.txt` 觀察清單裡的股票另外加上主力與券商分點（清單本身不會顯示在頁面上；第一檔為預設開啟）。
+`config/stocks.txt` 觀察清單與 `config/top200.txt`（成交值前 200 名）裡的股票另外加上主力與券商分點（清單本身不會顯示在頁面上；觀察清單第一檔為預設開啟）。
 使用者可用 Google 帳號登入，各自維護自己的**自選**清單（見下方「帳號與自選」）。
 
 | 面板 | 來源 | 頻率 | 涵蓋 |
