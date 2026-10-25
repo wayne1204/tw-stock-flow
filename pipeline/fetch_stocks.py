@@ -34,7 +34,7 @@ Usage:
   python3 pipeline/fetch_stocks.py                     # whole market + watchlist extras
   python3 pipeline/fetch_stocks.py --watchlist-only    # just config/stocks.txt (fast)
   python3 pipeline/fetch_stocks.py --stocks 2327,2330  # just these, with broker data
-  python3 pipeline/fetch_stocks.py --months 36         # deeper history (default 24)
+  python3 pipeline/fetch_stocks.py --start 2024-01     # narrower history (default 2022-01)
   python3 pipeline/fetch_stocks.py --refresh-top       # re-rank config/top200.txt, then fetch
   python3 pipeline/fetch_stocks.py --rebuild           # no requests; cache only
 
@@ -58,7 +58,9 @@ ROOT = fd.ROOT
 OUT_DIR = os.path.join(fd.DATA_DIR, "stocks")
 WATCHLIST = os.path.join(ROOT, "config", "stocks.txt")
 TOPLIST = os.path.join(ROOT, "config", "top200.txt")
-DEFAULT_MONTHS = 24
+# Fixed anchor, not a rolling window: the history grows rather than dropping
+# the 2022 bear market, which the backtest panel leans on.
+DEFAULT_START = "2022-01"
 DEFAULT_BROKER_MONTHS = 12
 TOP_N, TOP_SESSIONS = 200, 60
 LOCK = os.path.join(fd.DATA_DIR, ".fetch_stocks.lock")
@@ -765,20 +767,30 @@ def write_index(watchlist, tracked=None):
     return entries
 
 
-def main():
+def _month(v):
+    if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", v):
+        raise argparse.ArgumentTypeError(f"{v!r} is not YYYY-MM")
+    return v
+
+
+def parse_args(argv=None):
     ap = argparse.ArgumentParser(description="Fetch single-stock data for stock.html")
     ap.add_argument("--stocks", help="comma-separated codes to build (with broker data)")
     ap.add_argument("--watchlist-only", action="store_true",
                     help="build only the stocks in stocks.txt")
-    ap.add_argument("--months", type=int, default=DEFAULT_MONTHS,
-                    help=f"months of history (default {DEFAULT_MONTHS})")
+    ap.add_argument("--start", type=_month, default=DEFAULT_START,
+                    help=f"first month of history YYYY-MM (default {DEFAULT_START})")
     ap.add_argument("--rebuild", action="store_true",
                     help="issue no requests; rebuild outputs from the cache only")
     ap.add_argument("--broker-months", type=int, default=DEFAULT_BROKER_MONTHS,
                     help=f"months of broker day tables to fetch (default {DEFAULT_BROKER_MONTHS})")
     ap.add_argument("--refresh-top", action="store_true",
                     help=f"re-rank {os.path.basename(TOPLIST)} from the market data first")
-    args = ap.parse_args()
+    return ap.parse_args(argv)
+
+
+def main():
+    args = parse_args()
 
     # One fetcher at a time: a long backfill and the nightly cron must not walk
     # the same cache and outputs together. A run that finds the lock taken skips.
@@ -799,10 +811,7 @@ def main():
 
     today = date.today()
     end = f"{today.year:04d}-{today.month:02d}"
-    y, m = today.year, today.month - (args.months - 1)
-    while m < 1:
-        y, m = y - 1, m + 12
-    months = fd.month_range(f"{y:04d}-{m:02d}", end)
+    months = fd.month_range(args.start, end)
     t0 = time.time()
     print(f"[{'REBUILD' if args.rebuild else 'FETCH'}] {months[0]} -> {months[-1]}")
 

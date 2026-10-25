@@ -349,5 +349,18 @@ class TestWatchlist(Base):
         self.assertEqual(fs.read_watchlist(f.name), ["2327", "2330"])
 
 
+class TestHistoryWindow(Base):
+    def test_defaults_to_a_fixed_2022_anchor(self):
+        # Fixed, not rolling: the window grows instead of dropping 2022's bear market
+        self.assertEqual(fs.parse_args([]).start, "2022-01")
+
+    def test_start_overrides_the_anchor(self):
+        self.assertEqual(fs.parse_args(["--start", "2025-06"]).start, "2025-06")
+
+    def test_rejects_a_malformed_start(self):
+        with self.assertRaises(SystemExit), patch("sys.stderr"):
+            fs.parse_args(["--start", "2022"])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -26,6 +26,17 @@ module.exports = {
       t.ok(`${page} hides the empty stamp`, html.includes(".deployed:empty{display:none}"));
     }
     const run = read("run.sh");
+    // Every local script a page loads must ship, or the deployed page breaks
+    // while file:// and ./run.sh keep working. data/stocks/ is added by glob.
+    const listed = (run.match(/local files=\(([^)]*)\)/) || [, ""])[1].split(/\s+/);
+    for (const page of ["index.html", "stock.html"]) {
+      const srcs = [...read(path.join("web", page)).matchAll(/<script src="([^"]+)"/g)].map(m => m[1])
+        .filter(src => !/^https?:/.test(src) && !src.startsWith("data/stocks/"));
+      const missing = srcs.filter(src => !listed.includes(src));
+      t.ok(`run.sh deploys every local script ${page} loads`, missing.length === 0,
+        missing.length ? `missing: ${missing.join(", ")}` : srcs.join(", "));
+    }
+    t.ok("run.sh deploys the TAIEX data stock.html loads lazily", listed.includes("data/taiex-daily.js"));
     t.ok("run.sh stamps both staged pages",
       run.includes('s|<!--DEPLOYED-->|$stamp|" "$STAGE/index.html" "$STAGE/stock.html"'));
   }

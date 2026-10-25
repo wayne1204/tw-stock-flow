@@ -201,6 +201,33 @@
   .err{background:var(--err-bg);border:1px solid var(--err-line);color:var(--err-ink);padding:18px 20px;
     border-radius:10px;line-height:1.7}
 
+  /* 回測: collapsed until asked for, computed on open */
+  details.panel > summary{list-style:none;cursor:pointer}
+  details.panel > summary::-webkit-details-marker{display:none}
+  details.panel > summary h2::before{content:"";display:inline-block;margin:0 9px 1px 2px;vertical-align:middle;
+    border-style:solid;border-width:5px 0 5px 7px;border-color:transparent transparent transparent var(--ink-3);transition:transform .12s}
+  details.panel[open] > summary h2::before{transform:rotate(90deg)}
+  .bt-ctrls{display:flex;flex-wrap:wrap;gap:10px 18px;padding:0 10px 12px}
+  .bt-ctrls .seg{background:var(--bg)}
+  #bt-body{padding:0 10px 4px}
+  #bt-body .tbl{overflow-x:auto}
+  #bt-body p{margin:4px 2px 12px;color:var(--ink-2)}
+  .bt-row{cursor:pointer}
+  .bt-row:hover td{background:var(--surface-2)}
+  .bt-row .def{display:block;color:var(--ink-3);font-size:11.5px;white-space:normal}
+  .bt-row.insufficient td{color:var(--ink-4)}
+  .bt-row.insufficient .def{color:var(--ink-4)}
+  .badge{display:inline-block;margin-left:6px;padding:0 6px;border-radius:99px;font-size:10.5px;
+    color:var(--c-trust);border:1px solid var(--c-trust)}
+  .bt-detail td{background:var(--bg);text-align:left}
+  .q-bars{display:grid;gap:5px;max-width:560px;padding:4px 0}
+  .q-bar{display:grid;grid-template-columns:5.5em 1fr 1fr 5em 4em;align-items:center;gap:6px;font-size:12px}
+  .q-bar .lbl{color:var(--ink-3)}
+  .q-bar .neg-side{display:flex;justify-content:flex-end;border-right:1px solid var(--ink-4)}
+  .q-bar i{display:block;height:10px;border-radius:2px}
+  .q-bar .v,.q-bar .k{text-align:right}
+  .q-bar .k{color:var(--ink-3)}
+  .bt-note{color:var(--ink-3);font-size:12px;line-height:1.7;margin:4px 12px 10px}
   @media (max-width: 720px){
     .wrap{padding:14px 12px 40px}
     h1{font-size:17px}
@@ -336,6 +363,33 @@
       <div class="brokers num" id="brokers"></div>
     </div>
 
+    <details class="panel" id="bt">
+      <summary class="panel-head">
+        <h2>回測 · 籌碼因子與後續報酬</h2>
+        <span class="hint">各因子與此股往後報酬的歷史關聯，依 |IC| 排序 · 點列可展開五分位</span>
+      </summary>
+      <div class="bt-ctrls">
+        <div><span class="ctrl-label">持有天數</span>
+          <div class="seg" id="bt-h" role="group" aria-label="持有天數">
+            <button data-v="5">5 日</button><button data-v="20" aria-pressed="true">20 日</button><button data-v="60">60 日</button>
+          </div></div>
+        <div><span class="ctrl-label">因子累計天數 L</span>
+          <div class="seg" id="bt-l" role="group" aria-label="因子累計天數">
+            <button data-v="1">1 日</button><button data-v="5" aria-pressed="true">5 日</button><button data-v="20">20 日</button>
+          </div></div>
+        <div><span class="ctrl-label">均線</span>
+          <div class="seg" id="bt-ma" role="group" aria-label="均線位置的均線">
+            <button data-v="5">MA5</button><button data-v="20" aria-pressed="true">MA20</button><button data-v="60">MA60</button>
+          </div></div>
+        <div><span class="ctrl-label">報酬</span>
+          <div class="seg" id="bt-rel" role="group" aria-label="報酬基準">
+            <button data-v="raw" aria-pressed="true">原始</button><button data-v="rel">相對加權指數</button>
+          </div></div>
+      </div>
+      <div id="bt-body" class="num"></div>
+      <p class="bt-note" id="bt-note"></p>
+    </details>
+
     <footer>
       <p><strong>主力買賣超</strong> = 當期買超前 15 名券商分點合計 − 賣超前 15 名合計（富邦 e-Broker 定義）；
       日序列以每日分點表回補整段期間。選擇過去日期時，近 1 日分點顯示當天資料，近 5/20 日統計只提供最新交易日。<strong>大戶</strong> = 集保持股 &gt; 400 張者，
@@ -352,6 +406,7 @@
   </div>
 </div>
 
+<script src="js/backtest.js"></script>
 <script src="data/stocks/index.js"></script>
 <script>
 (function(){
@@ -470,14 +525,21 @@
   // the last close. Sessions before it are rescaled to today's terms (price
   // ÷ close/reference, volume × the same), so the K chart has no cliff;
   // each such row keeps the traded figures in `raw` for the tooltip.
-  function restore(s){
+  // `chips` rescales the lot-denominated chip fields the same way (the
+  // backtest compares them across the event); the chart shows them as reported.
+  const CHIP_LOTS = ['foreign','trust','dealer','mainForce','marginBalance','marginChange'];
+  function restore(s, chips){
     const ev = s.adjustments || [];
     if(!ev.length) return s.daily;
     const px = (v, f) => has(v) ? +(v / f).toFixed(4) : v;
+    const lots = (v, f) => has(v) ? Math.round(v * f) : v;
     return s.daily.map(r=>{
       const f = ev.reduce((a,e)=> r.date < e.date ? a * e.ratio : a, 1);
-      return f === 1 ? r : {...r, open:px(r.open,f), high:px(r.high,f), low:px(r.low,f),
-        close:px(r.close,f), volume: has(r.volume) ? Math.round(r.volume * f) : r.volume, raw:r};
+      if(f === 1) return r;
+      const out = {...r, open:px(r.open,f), high:px(r.high,f), low:px(r.low,f),
+        close:px(r.close,f), volume:lots(r.volume,f), raw:r};
+      if(chips) for(const k of CHIP_LOTS) out[k] = lots(r[k], f);
+      return out;
     });
   }
   function derive(s){
@@ -811,7 +873,7 @@
           `${e.estimated ? '，依價格推算' : ''}）`).join('');
       sel = S.rows.length - 1;
       syncDate();
-      renderKpis(); renderChart(); renderBrokers();
+      renderKpis(); renderChart(); renderBrokers(); renderBacktest();
     }).catch(()=>{
       // A bad pick while a stock is on screen is a message, not a dead page.
       if(S){
@@ -835,6 +897,79 @@
   seg('seg-range', v=>{ range = +v; if(S) chart.dispatchAction({type:'dataZoom', ...zoomOpt()}); });
   seg('seg-period', v=>{ period = v; if(S) renderBrokers(); });
 
+
+  // ── 回測 ──────────────────────────────────────────────────
+  // Computed only while the panel is open; describes the past, so there is
+  // deliberately no "where today's value sits" reading.
+  const bt = {h:20, L:5, ma:20, rel:false, open:null};
+  const btPanel = document.getElementById('bt'), btBody = document.getElementById('bt-body');
+  const pct = (v,d=2) => has(v) ? sgn(v*100,d) + '%' : '—';
+  // TAIEX only for the relative toggle: a lazy <script>, like the stock files
+  function loadTaiex(){
+    if(Array.isArray(window.TAIEX_DATA)) return Promise.resolve(window.TAIEX_DATA);
+    return new Promise((resolve, reject)=>{
+      const s = document.createElement('script');
+      s.src = 'data/taiex-daily.js';
+      s.onload = () => Array.isArray(window.TAIEX_DATA) ? resolve(window.TAIEX_DATA) : reject();
+      s.onerror = reject;
+      document.head.appendChild(s);
+    });
+  }
+  function quintileBars(f){
+    const max = Math.max(...f.quintiles.map(q => has(q.mean) ? Math.abs(q.mean) : 0)) || 1;
+    const side = (q, neg) => has(q.mean) && (q.mean < 0) === neg
+      ? `<i style="width:${Math.abs(q.mean)/max*100}%;background:${neg ? COLORS.down : COLORS.up}"></i>` : '';
+    return '<div class="q-bars">' + f.quintiles.map((q, k)=>
+      `<div class="q-bar"><span class="lbl">Q${k+1}${k===0?' 最低':k===4?' 最高':''}</span>` +
+      `<span class="neg-side">${side(q, true)}</span><span>${side(q, false)}</span>` +
+      `<span class="v ${cls(q.mean)}">${pct(q.mean)}</span><span class="k">n ${q.n}</span></div>`).join('') + '</div>';
+  }
+  function renderBacktest(){
+    const note = document.getElementById('bt-note');
+    note.textContent = `報酬 = 訊號日（籌碼於收盤後公布）的次一交易日開盤進場、第 ${bt.h} 個交易日收盤出場` +
+      (bt.rel ? '，相對加權指數：扣除同期加權指數報酬（上櫃股票亦同）' : '，原始報酬') +
+      `。分位以全樣本切分，用於描述過去，並非模擬交易。有效樣本 = n ÷ 持有天數（週資料 ÷ 持有週數），` +
+      `低於 30 標示樣本少、低於 10 不列數字；相鄰區間重疊，不提供顯著性檢定。` +
+      `本面板僅描述歷史關聯，不構成投資建議。`;
+    if(!S || !btPanel.open){ btBody.innerHTML = ''; return; }
+    if(!bt.rel) return drawBacktest(null);
+    const code = S.stock.code;
+    const current = () => S && S.stock.code === code && bt.rel && btPanel.open;
+    loadTaiex().then(m=>{ if(current()) drawBacktest(m); }).catch(()=>{
+      if(current()) btBody.innerHTML = '<p>加權指數資料載入失敗（<code>data/taiex-daily.js</code>），無法計算相對報酬。</p>';
+    });
+  }
+  function drawBacktest(market){
+    S.btRows = S.btRows || restore(S.stock, true);
+    const res = StockBacktest.run(S.btRows, S.stock.holders || [], {horizon:bt.h, lookback:bt.L, ma:bt.ma, market});
+    if(res.status === 'short'){
+      btBody.innerHTML = `<p>只有 ${res.days} 個交易日，交易日不足 120 日，暫不回測。</p>`;
+      return;
+    }
+    const head = '<tr><th>因子</th><th>IC</th><th>Q5 − Q1</th><th>Q5 勝率</th><th>樣本 n</th><th>有效樣本</th></tr>';
+    const body = res.factors.map(f=>{
+      const insufficient = f.status === 'insufficient';
+      const row = `<tr class="bt-row${insufficient?' insufficient':''}" data-key="${f.key}">` +
+        `<td data-col="label">${f.label}<span class="def">${f.def}</span></td>` +
+        `<td data-col="ic">${insufficient ? '樣本不足' : has(f.ic) ? sgn(f.ic,2) : '—'}</td>` +
+        `<td data-col="spread" class="${insufficient?'':cls(f.spread)}">${insufficient ? '—' : pct(f.spread)}</td>` +
+        `<td data-col="hit">${insufficient || !has(f.hit) ? '—' : nf(f.hit*100,0) + '%'}</td>` +
+        `<td data-col="n">${f.n}</td>` +
+        `<td data-col="effN">${nf(f.effN,1)}${f.status==='thin' ? '<span class="badge">樣本少</span>' : ''}</td></tr>`;
+      return row + (bt.open === f.key && !insufficient ? `<tr class="bt-detail"><td colspan="6">${quintileBars(f)}</td></tr>` : '');
+    }).join('');
+    btBody.innerHTML = `<div class="tbl"><table id="bt-table"><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
+  }
+  btPanel.addEventListener('toggle', renderBacktest);
+  btBody.addEventListener('click', e=>{
+    const r = e.target.closest('tr.bt-row'); if(!r) return;
+    bt.open = bt.open === r.dataset.key ? null : r.dataset.key;
+    renderBacktest();
+  });
+  seg('bt-h', v=>{ bt.h = +v; renderBacktest(); });
+  seg('bt-l', v=>{ bt.L = +v; renderBacktest(); });
+  seg('bt-ma', v=>{ bt.ma = +v; renderBacktest(); });
+  seg('bt-rel', v=>{ bt.rel = v === 'rel'; renderBacktest(); });
 
   // ── Date ──────────────────────────────────────────────────
   const dPick = document.getElementById('d-pick');

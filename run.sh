@@ -52,7 +52,7 @@ deploy() {
   export PATH="$(dirname "$wrangler"):$PATH"
 
   # Paths are relative to web/, the site root.
-  local files=(index.html stock.html js/detect.js data/taiex-daily.js) f
+  local files=(index.html stock.html js/detect.js js/backtest.js data/taiex-daily.js) f
   for f in "${files[@]}"; do
     [[ -s "web/$f" ]] || { echo "run.sh deploy: missing web/$f (run python3 pipeline/fetch_data.py)" >&2; exit 1; }
   done

@@ -41,7 +41,7 @@ pipeline/fetch_stocks.py   →   web/data/stocks/*.js             →   web/stoc
 ```
 
 旗標：`--bundle` 重打包、`--commit` 資料有變才 commit、`--deploy` 發佈、`--start YYYY-MM`
-限縮抓取範圍。部署只上傳 `web/` 底下頁面用到的檔案（`index.html`、`stock.html`、`js/detect.js`、`data/` 輸出）；
+限縮抓取範圍。部署只上傳 `web/` 底下頁面用到的檔案（`index.html`、`stock.html`、`js/detect.js`、`js/backtest.js`、`data/` 輸出）；
 專案名稱可用 `CF_PAGES_PROJECT` 覆寫。
 
 ## 資料來源
@@ -87,7 +87,8 @@ pipeline/fetch_stocks.py   →   web/data/stocks/*.js             →   web/stoc
 | 主力買賣超、券商分點買賣超前 15 名（1/5/20 日） | [富邦 e-Broker](https://fubon-ebrokerdj.fbs.com.tw/z/zc/zco/zco_2327.djhtm) | 日 | 觀察清單 + 成交值前 200 |
 
 ```bash
-python3 pipeline/fetch_stocks.py                   # 全市場（預設 24 個月）+ 追蹤股的分點資料（近 12 個月）
+python3 pipeline/fetch_stocks.py                   # 全市場（預設自 2022-01 起）+ 追蹤股的分點資料（近 12 個月）
+python3 pipeline/fetch_stocks.py --start 2024-01   # 縮短歷史區間
 python3 pipeline/fetch_stocks.py --refresh-top     # 先依近 60 日平均成交值重排 config/top200.txt
 python3 pipeline/fetch_stocks.py --watchlist-only  # 只建 config/stocks.txt（快）
 python3 pipeline/fetch_stocks.py --stocks 2454     # 只建指定股票，含分點資料
@@ -118,6 +119,29 @@ echo 2317 >> config/stocks.txt                     # 把股票加入觀察清單
   一百多 MB，遠低於 Cloudflare Pages 免費方案的 20,000 檔 / 單檔 25 MiB 上限）。新 clone 須先跑一次
   `python3 pipeline/fetch_stocks.py`，頁面才有個股資料。
 - 缺漏一律留白：ETF 沒有集保分散頁、新上市股票從掛牌日開始、當日無法人 / 融資列的股票即為斷點。
+
+### 回測面板
+
+個股頁最下方的「回測」面板（預設收合，展開才計算）是**事件研究**，不是交易策略：對每個籌碼因子，
+看它和此股往後報酬的歷史關聯。全部在瀏覽器裡由 `web/js/backtest.js` 計算，用的是頁面已載入的還原 K 線。
+
+| 因子 | 定義（L = 因子累計天數，預設 5） | 頻率 |
+|---|---|---|
+| 外資、投信 | 近 L 日買賣超 ÷ 前 20 日均量 | 日 |
+| 量能變化 | 當日成交量 ÷ 前 20 日均量 | 日 |
+| 均線位置 | 收盤 ÷ MA20 − 1（可切 MA5 / MA60） | 日 |
+| 融資 | 融資餘額近 L 日增減 % | 日 |
+| 主力 | 近 L 日主力買賣超 ÷ 前 20 日均量（僅追蹤股） | 日 |
+| 股東人數變化、大戶持股比變化 | 集保總股東人數週增減 %、> 400 張持股比週增減（百分點） | 週 |
+
+- **報酬**：籌碼於收盤後公布，所以從**次一交易日開盤**進場、第 N 個交易日（5 / 20 / 60）收盤出場。
+  可切「相對加權指數」：扣除同期加權指數報酬（上櫃股票也用加權指數，櫃買指數未抓取）。
+- **統計**：Spearman IC、五分位平均報酬（Q5 − Q1）、Q5 勝率、樣本數。分位以**全樣本**切分，用於描述過去。
+- **有效樣本** = n ÷ N（週資料 ÷ N/5）：相鄰區間重疊，n 本身會高估證據強度，因此不提供 p 值。
+  有效樣本 < 30 標「樣本少」，< 10 不列數字；不足 120 個交易日的股票不回測。
+- 缺資料的日子只從該因子剔除；沒有資料的因子（ETF 無集保、非追蹤股無主力）不列出。
+- 刻意**不顯示**今日因子落在哪個分位，也沒有日期區間選擇：面板只描述歷史關聯，不構成投資建議。
+- 歷史深度：日資料自 2022-01 起（`--start`）；主力只回補近 12 個月；集保頁本身只有約 3 年。
 
 ## 帳號與自選（Google 登入）
 
@@ -159,6 +183,7 @@ npm test      # 全部；node tests/js/run.js detect 只跑名稱含 detect 的�
 | 套件 | 內容 |
 |---|---|
 | `tests/js/detect.test.js` | 演算法規則，跑在手工序列上 |
+| `tests/js/backtest.test.js` | 個股回測：進場規則、IC、五分位、有效樣本、因子定義 |
 | `tests/py/fetch_test.py` | 抓取腳本的解析與快取（不連網） |
 | `tests/py/stock_fetch_test.py` | 個股抓取的解析（不連網） |
 | `tests/js/stock.test.js` | 在 jsdom 中實際執行 `stock.html`（含模擬 API 的登入 / 自選流程） |
@@ -174,6 +199,7 @@ web/                 網站本體（部署根目錄，也可直接 file:// 開�
   index.html         大盤儀表板（CDN 載入 ECharts）
   stock.html         個股籌碼頁
   js/detect.js       修正波段偵測（網頁與 verify.js 共用）
+  js/backtest.js     個股籌碼因子回測（stock.html 與測試共用）
   data/              抓取輸出：taiex-daily.{json,js}、stocks/、raw/ 快取
 pipeline/            Python 資料管線
   fetch_data.py      大盤抓取 + 快取 + 合併

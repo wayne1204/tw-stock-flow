@@ -15,11 +15,11 @@ const WEB = path.join(__dirname, "..", "..", "web");
 const read = p => fs.readFileSync(path.join(WEB, p), "utf8");
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-function fixture() {
+function fixture(sessions = 80) {
   const daily = [];
   const d0 = Date.UTC(2026, 6, 1);
   let px = 500;
-  for (let i = 0; daily.length < 80; i++) {
+  for (let i = 0; daily.length < sessions; i++) {
     const dt = new Date(d0 + i * 864e5);
     if (dt.getUTCDay() === 0 || dt.getUTCDay() === 6) continue;
     const o = px, c = px + ((i % 5) - 2) * 3;
@@ -81,6 +81,8 @@ function buildHtml({ stock, other, list }, apiStub = "") {
   html = html.replace("<title>", STUB + apiStub + "<title>");
   html = html.replace(/<script src="https:\/\/cdn[^"]*"><\/script>/,
     `<script>${fs.readFileSync(require.resolve("echarts/dist/echarts.min.js"), "utf8")}</script>`);
+  html = html.replace('<script src="js/backtest.js"></script>',
+    `<script>${read("js/backtest.js")}</script>`);
   html = html.replace('<script src="data/stocks/index.js"></script>',
     `<script>window.STOCK_LIST=${JSON.stringify(list)};` +
     `window.STOCK_DATA={"${stock.code}":${JSON.stringify(stock)},"${other.code}":${JSON.stringify(other)}};</script>`);
@@ -242,8 +244,88 @@ module.exports = {
     }
 
     await accountFlow(t, fx);
+    await backtestFlow(t);
   }
 };
+
+/**
+ * The 回測 panel against a 160-session stock (long enough to score) and the
+ * 80-session one (too short). TAIEX is preset on window, as the lazy
+ * data/taiex-daily.js would leave it.
+ */
+async function backtestFlow(t) {
+  const { JSDOM, VirtualConsole } = require("jsdom");
+  const errors = [];
+  const vc = new VirtualConsole();
+  vc.on("jsdomError", e => errors.push(e.message));
+  vc.on("error", (...a) => errors.push(a.join(" ")));
+  // A 1:2 split before session 100: raw margin lots double there, so once
+  // the chip fields are restored like volume, 融資 is flat across it.
+  const base = fixture(160).stock;
+  const long = { ...base, code: "7777", name: "長期股",
+    daily: base.daily.map((r, i) => ({ ...r, marginBalance: i < 100 ? 5000 : 10000 })),
+    adjustments: [{ date: base.daily[100].date, kind: "分割", before: 600, ref: 300, ratio: 2 }] };
+  const short = fixture().stock;
+  const list = [{ code: "7777", name: "長期股", end: long.end, tracked: true },
+                { code: "9999", name: "測試股", end: short.end, tracked: true }];
+  const market = long.daily.map(r => ({ date: r.date, open: 1000, close: 1000 + (+r.date.slice(-2) % 7) * 20 }));
+  const preset = `<script>window.TAIEX_DATA=${JSON.stringify(market)};</script>`;
+  const dom = new JSDOM(buildHtml({ stock: long, other: short, list }, preset), { runScripts: "dangerously",
+    pretendToBeVisual: true, virtualConsole: vc, url: "http://localhost/stock.html" });
+  const { window } = dom, doc = window.document;
+  const panel = () => doc.getElementById("bt");
+  const rows = () => [...doc.querySelectorAll("#bt-table tbody tr.bt-row")];
+  const cell = (key, col) => doc.querySelector(`#bt-table tr[data-key="${key}"] td[data-col="${col}"]`).textContent;
+  try {
+    await sleep(1200);
+    t.eq("[回測] the long stock is open", doc.getElementById("title").textContent, "7777 長期股");
+    t.ok("[回測] panel starts collapsed and uncomputed", !panel().open && rows().length === 0);
+    panel().open = true;
+    panel().dispatchEvent(new window.Event("toggle"));
+    await sleep(50);
+    const keys = rows().map(r => r.dataset.key);
+    t.ok("[回測] opening it scores every factor with data, 主力 included",
+      ["foreign", "trust", "volume", "ma", "margin", "mainForce", "holders", "big400"].every(k => keys.includes(k)) &&
+      !keys.includes("dealer"), keys.join(","));
+    t.eq("[回測] defaults: 20 days, L 5, MA20, raw",
+      [...doc.querySelectorAll("#bt [aria-pressed=true]")].map(b => b.dataset.v), ["20", "5", "20", "raw"]);
+    t.ok("[回測] a thin weekly sample is greyed out as 樣本不足",
+      doc.querySelector('#bt-table tr[data-key="holders"]').classList.contains("insufficient") &&
+      cell("holders", "ic") === "樣本不足", cell("holders", "ic"));
+
+    const n20 = cell("volume", "n");
+    doc.querySelector('#bt-h button[data-v="5"]').click();
+    t.ok("[回測] a shorter horizon pairs more sessions", +cell("volume", "n") > +n20, `${n20} → ${cell("volume", "n")}`);
+    t.eq("[回測] chip lots are split-adjusted like volume: no jump in 融資 at the split",
+      cell("margin", "ic"), "—");
+    t.ok("[回測] ~135 daily pairs over 5 days are flagged 樣本少", /樣本少/.test(cell("volume", "effN")), cell("volume", "effN"));
+
+    rows()[0].click();
+    const bars = doc.querySelectorAll("#bt-table tr.bt-detail .q-bar");
+    t.eq("[回測] clicking a factor expands its five quintile bars", bars.length, 5);
+    rows()[0].click();
+    t.eq("[回測] and clicking again folds them", doc.querySelectorAll("#bt-table tr.bt-detail").length, 0);
+
+    const raw = cell("ma", "spread");
+    doc.querySelector('#bt-rel button[data-v="rel"]').click();
+    await sleep(50);
+    t.ok("[回測] 相對加權指數 recomputes against TAIEX and says so",
+      cell("ma", "spread") !== raw && /相對加權指數/.test(doc.getElementById("bt-note").textContent),
+      `${raw} → ${cell("ma", "spread")}`);
+    t.ok("[回測] footnotes: full-sample quintiles and no investment advice",
+      /全樣本/.test(panel().textContent) && /不構成投資建議/.test(panel().textContent));
+
+    window.location.hash = "#9999";
+    window.dispatchEvent(new window.HashChangeEvent("hashchange"));
+    await sleep(100);
+    t.ok("[回測] a stock under 120 sessions says it is too short",
+      rows().length === 0 && /交易日不足/.test(doc.getElementById("bt-body").textContent),
+      doc.getElementById("bt-body").textContent.slice(0, 60));
+    t.ok("[回測] no errors", errors.length === 0, errors.slice(0, 3).join(" || ") || "clean");
+  } finally {
+    window.close();
+  }
+}
 
 /**
  * The page against a stubbed /api: what lib/account.mjs answers, recorded so
