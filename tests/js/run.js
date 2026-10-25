@@ -68,7 +68,7 @@ function runProcess(suiteName, cmd, args, opts = {}) {
 }
 
 (async () => {
-  console.log(c(C.bold, "TAIEX Drawdown Atlas — test suite"));
+  console.log(c(C.bold, "TW Stock Flow — test suite"));
 
   // ── JS module suites ─────────────────────────────────────────────────────
   const files = fs.readdirSync(TESTS_DIR)

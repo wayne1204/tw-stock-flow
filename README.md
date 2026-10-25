@@ -1,6 +1,6 @@
-# TAIEX Drawdown Atlas · 台股大盤修正波段分析
+# TW Stock Flow · 台股大盤修正波段與個股籌碼
 
-**線上版：<https://tw-stock-drawdown.pages.dev>**
+**線上版：<https://tw-stock-flow.pages.dev>**
 
 自 2017 年以來加權指數的每一次修正波段（峰谷法偵測），疊上成交金額、三大法人買賣超與
 融資餘額。資料全部來自臺灣證券交易所公開 endpoint；**不使用任何模擬資料**，抓不到就報錯、
@@ -31,7 +31,7 @@ pipeline/fetch_data.py   →   web/data/taiex-daily.{json,js}   →   web/index.
 `scripts/update_data.sh` 負責加鎖、日誌輪替（`fetch.log`）與失敗通知；證交所約 19:00 發佈籌碼資料：
 
 ```cron
-0 20 * * 1-5 /path/to/taiex-drawdown/scripts/update_data.sh --bundle --deploy --quiet
+0 20 * * 1-5 /path/to/tw-stock-flow/scripts/update_data.sh --bundle --deploy --quiet
 ```
 
 旗標：`--bundle` 重打包、`--commit` 資料有變才 commit、`--deploy` 發佈、`--start YYYY-MM`
@@ -127,11 +127,11 @@ email、名稱、頭像網址與自選代號。
 一次性設定：
 
 1. **Google OAuth 用戶端**：Google Cloud Console → API 和服務 → 憑證 → 建立 OAuth 用戶端 ID（網頁應用程式）。
-   「已授權的 JavaScript 來源」填 `https://tw-stock-drawdown.pages.dev`（要在預覽網址或本機測試再加
-   `https://<branch>.tw-stock-drawdown.pages.dev`、`http://localhost:8788`），不需要重新導向 URI。
+   「已授權的 JavaScript 來源」填 `https://tw-stock-flow.pages.dev`（要在預覽網址或本機測試再加
+   `https://<branch>.tw-stock-flow.pages.dev`、`http://localhost:8788`），不需要重新導向 URI。
    OAuth 同意畫面設為「外部」並**發布**（測試模式只允許測試使用者登入）。
 2. **D1 資料庫**：`npx wrangler d1 create tw-stock-atlas`（資料表會在第一次請求時自動建立）。
-3. **Cloudflare Pages 專案設定**（Workers & Pages → `tw-stock-drawdown` → Settings）：
+3. **Cloudflare Pages 專案設定**（Workers & Pages → `tw-stock-flow` → Settings）：
    - Bindings → Add → D1 database：變數名稱 `DB`，選上一步的資料庫。
    - Variables and Secrets → 新增 `GOOGLE_CLIENT_ID`（第 1 步的用戶端 ID），Production 與 Preview 都加。
 4. 重新 `./run.sh deploy`。

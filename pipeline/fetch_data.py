@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-TAIEX Drawdown Atlas - data fetcher
+TW Stock Flow - TAIEX data fetcher
 
 Pulls four datasets from the Taiwan Stock Exchange (TWSE) public endpoints and
 merges them into a single daily series:

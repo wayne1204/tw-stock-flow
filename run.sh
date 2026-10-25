@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run the TAIEX Drawdown Atlas dashboard locally, or publish it.
+# Run the TW Stock Flow dashboard locally, or publish it.
 #
 # Usage:
 #   ./run.sh              Fetch latest data, then serve at http://localhost:3001
@@ -12,7 +12,7 @@
 # subsequent runs only fetch new trading days (usually seconds).
 #
 # Deploy environment:
-#   CF_PAGES_PROJECT  Pages project name (default: tw-stock-drawdown)
+#   CF_PAGES_PROJECT  Pages project name (default: tw-stock-flow)
 #   WRANGLER          wrangler binary (default: on PATH, else the newest nvm one)
 #   CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID
 #                     Read from ./.env (gitignored) when present; not needed
@@ -32,7 +32,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")"
 deploy() {
   # Credentials live in a gitignored .env so cron can deploy without a login.
   if [[ -f .env ]]; then set -a; source .env; set +a; fi
-  local project="${CF_PAGES_PROJECT:-tw-stock-drawdown}" branch=main
+  local project="${CF_PAGES_PROJECT:-tw-stock-flow}" branch=main
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --branch) branch="$2"; shift 2 ;;

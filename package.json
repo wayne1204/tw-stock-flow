@@ -1,5 +1,5 @@
 {
-  "name": "taiex-drawdown-atlas",
+  "name": "tw-stock-flow",
   "version": "1.0.0",
   "description": "TAIEX correction-wave analysis with turnover, foreign flow and margin-balance overlays",
   "private": true,
