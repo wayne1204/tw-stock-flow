@@ -9,6 +9,8 @@ merges them into a single daily series:
   2. Market turnover         FMTQIK          (monthly query)
   3. Institutional trading   BFI82U          (single-day query)
   4. Margin & short stats    MI_MARGN        (single-day query)
+  5. Margin maintenance ratio MI_MARGN ALL + MI_INDEX (single-day, whole market,
+                              from 2022; shared with fetch_stocks.py's cache)
 
 Outputs:
   web/data/taiex-daily.json          merged daily series
@@ -425,6 +427,60 @@ def fetch_margin_day(ymd, rebuild_only=False):
     return None
 
 
+# The maintenance ratio needs every listed stock's margin lots and close, one
+# whole-market request each per day. fetch_stocks.py already caches both from
+# its default history start, so the series begins there rather than paying
+# ~2,500 extra requests to reach back to 2017.
+MARGIN_RATIO_START = "2022-01-01"
+
+
+def margin_collateral_by_day(trading_days, rebuild_only=False):
+    """
+    Market value of every TWSE-listed margin position, in NT$100M:
+    sum(margin lots x 1000 x close). Divided by the market margin balance
+    (融資金額) this is the market-wide maintenance ratio (大盤融資維持率) as
+    brokers and the press quote it.
+
+    A stock with no trade that day (suspended, illiquid) is valued at its last
+    seen close; one never seen in this run is left out. Days before
+    MARGIN_RATIO_START, or whose whole-market tables are missing, are absent.
+    """
+    # fetch_stocks imports this module as `fetch_data`. Run as a script we are
+    # `__main__`, so register under that name too, or the import would build a
+    # second copy with its own session and counters.
+    if __name__ in sys.modules:
+        sys.modules.setdefault("fetch_data", sys.modules[__name__])
+    import fetch_stocks as fs
+
+    out, last_close = {}, {}
+    for d in trading_days:
+        if d < MARGIN_RATIO_START:
+            continue
+        ymd = d.replace("-", "")
+        quotes, _ = fs.fetch_quotes_day(ymd, rebuild_only)
+        lots = fs.fetch_margin_all_day(ymd, rebuild_only)
+        for code, q in quotes.items():
+            if q[3] is not None:
+                last_close[code] = q[3]
+        if not quotes or not lots:
+            continue
+        total = 0.0
+        for code, (_, bal) in lots.items():
+            close = last_close.get(code)
+            if bal and close is not None:
+                total += bal * fs.LOTS * close
+        if total > 0:
+            out[d] = total / 1e8
+    return out
+
+
+def margin_ratio(collateral_yi, balance_yi):
+    """Maintenance ratio in percent, or None when either side is missing."""
+    if collateral_yi is None or not balance_yi:
+        return None
+    return round(collateral_yi / balance_yi * 100, 2)
+
+
 # --------------------------------------------------------------------------
 # Main
 # --------------------------------------------------------------------------
@@ -496,6 +552,12 @@ def main():
                   f"flows {len(flows)} / margin {len(margin)}  {el:.1f} min elapsed",
                   flush=True)
 
+    # The whole-market tables are usually cache hits: fetch_stocks.py reads the
+    # same ones. Only a day it has not seen yet costs two requests here.
+    print("\n      Margin maintenance ratio (whole-market tables from "
+          f"{MARGIN_RATIO_START[:7]})", flush=True)
+    collateral = margin_collateral_by_day(trading_days, args.rebuild)
+
     # --- Stage 3: merge and write -------------------------------------------
     print("\n[3/3] Merging")
     fetched = []
@@ -517,6 +579,7 @@ def main():
             **{k: flows.get(d, {}).get(k)
                for k in ("foreignNetYi", "trustNetYi", "dealerNetYi")},
             "marginBalanceYi": m.get("marginBalanceYi"),
+            "marginRatio": margin_ratio(collateral.get(d), m.get("marginBalanceYi")),
         })
 
     # Fold this run's range into whatever the previous run wrote. --start names
@@ -545,6 +608,7 @@ def main():
             "trust": sum(1 for r in merged if r["trustNetYi"] is not None),
             "dealer": sum(1 for r in merged if r["dealerNetYi"] is not None),
             "margin": sum(1 for r in merged if r["marginBalanceYi"] is not None),
+            "marginRatio": sum(1 for r in merged if r.get("marginRatio") is not None),
         },
     }
     out_js = os.path.join(DATA_DIR, "taiex-daily.js")
@@ -562,6 +626,7 @@ def main():
   Turnover         {c['turnover']}  ({c['turnover']/n*100:.1f}%)
   Foreign net      {c['foreign']}  ({c['foreign']/n*100:.1f}%)
   Margin balance   {c['margin']}  ({c['margin']/n*100:.1f}%)
+  Margin ratio     {c['marginRatio']}  (from {MARGIN_RATIO_START})
   Close cross-check {n - mismatch}/{n} match
   {_stats['requests']} requests / {_stats['cache_hits']} cache hits / {_stats['refreshed']} stale refreshed / {_stats['retries']} retries
   Elapsed {el/60:.1f} min

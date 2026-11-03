@@ -427,5 +427,32 @@ class TestFetchMarginDay(NetworkGuardedTestCase):
         self.assertIsNone(result)
 
 
+# --------------------------------------------------------------------------
+# Market margin maintenance ratio  (real cache fixtures: data/raw/MI_MARGN_ALL,
+# data/raw/MI_INDEX - the whole-market tables fetch_stocks.py caches)
+# --------------------------------------------------------------------------
+
+class TestMarginRatio(NetworkGuardedTestCase):
+
+    def test_ratio_on_the_2024_08_05_crash_day(self):
+        # Widely reported at about 148% the day the TAIEX fell 8.4%.
+        days = ["2024-08-02", "2024-08-05"]
+        coll = fetch_data.margin_collateral_by_day(days, rebuild_only=True)
+        bal = fetch_data.fetch_margin_day("20240805", rebuild_only=True)["marginBalanceYi"]
+        ratio = fetch_data.margin_ratio(coll["2024-08-05"], bal)
+        self.assertGreater(ratio, 145)
+        self.assertLess(ratio, 151)
+
+    def test_days_before_the_series_start_are_absent(self):
+        coll = fetch_data.margin_collateral_by_day(["2021-12-30"], rebuild_only=True)
+        self.assertEqual(coll, {})
+
+    def test_missing_side_gives_none_not_zero(self):
+        self.assertIsNone(fetch_data.margin_ratio(None, 3000))
+        self.assertIsNone(fetch_data.margin_ratio(4500, None))
+        self.assertIsNone(fetch_data.margin_ratio(4500, 0))
+        self.assertEqual(fetch_data.margin_ratio(4500, 3000), 150.0)
+
+
 if __name__ == "__main__":
     unittest.main()

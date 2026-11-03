@@ -129,6 +129,24 @@ module.exports = {
     }
 
     {
+      // Maintenance ratio low: the minimum over peak..trough only. The 120 after
+      // the trough is in the recovery leg and must not count.
+      const rows = series([100, 95, 85, 80, 101], {
+        0: { marginRatio: 170 },
+        1: { marginRatio: null },
+        2: { marginRatio: 138.5 },
+        3: { marginRatio: 141 },
+        4: { marginRatio: 120 }
+      });
+      const [e] = detectEpisodes(rows, 0.07, "close");
+      t.eq("maintenance ratio low is the peak..trough minimum", e.marginRatioLow, 138.5);
+      t.eq("maintenance ratio low carries its date", e.marginRatioLowDate, rows[2].date);
+      const [none] = detectEpisodes(series([100, 80, 101]), 0.07, "close");
+      t.eq("maintenance ratio low is null without data", none.marginRatioLow, null);
+      t.eq("its date is null too", none.marginRatioLowDate, null);
+    }
+
+    {
       // Margin gaps fall back to the nearest real reading, inward from each end.
       const rows = series([100, 100, 80, 101], {
         0: { marginBalanceYi: null },

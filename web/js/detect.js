@@ -71,6 +71,14 @@
       const mChg = mStart !== null && mTrough !== null ? mTrough - mStart : null;
       const mChgPct = mChg !== null && mStart ? (mChg / mStart) * 100 : null;
 
+      // Lowest market maintenance ratio, peak -> trough. Null when the window
+      // has no ratio at all (the series starts in 2022), never a partial guess.
+      let rLow = null, rLowIdx = null;
+      for (let k = pi; k <= ti; k++) {
+        const v = rows[k].marginRatio;
+        if (v !== null && v !== undefined && (rLow === null || v < rLow)) { rLow = v; rLowIdx = k; }
+      }
+
       // Deleverage ratio = margin decline % / index decline % (both negative -> positive)
       const kill = mChgPct !== null && ddPct < 0 ? mChgPct / ddPct : null;
 
@@ -104,6 +112,7 @@
         marginStartYi: mStart, marginTroughYi: mTrough,
         marginChgYi: mChg, marginChgPct: mChgPct,
         killRatio: kill,
+        marginRatioLow: rLow, marginRatioLowDate: rLowIdx === null ? null : dates[rLowIdx],
         fwd1mPct: fwd(21), fwd3mPct: fwd(63), fwd1yPct: fwd(252)
       };
     }

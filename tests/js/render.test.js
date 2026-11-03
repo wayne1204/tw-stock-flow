@@ -173,9 +173,9 @@ module.exports = {
       t.ok("error banner is hidden", doc.getElementById("error").hidden);
       t.ok("app container is revealed", doc.getElementById("app").hidden === false);
 
-      // ── 3. Exactly 5 KPI cards, all with non-empty values ───────────────
+      // ── 3. Exactly 6 KPI cards, all with non-empty values ───────────────
       const kpis = doc.querySelectorAll("#kpis .kpi");
-      t.eq("exactly 5 KPI cards render", kpis.length, 5);
+      t.eq("exactly 6 KPI cards render", kpis.length, 6);
       t.ok("every KPI card has a non-empty value",
         [...kpis].every(k => {
           const v = k.querySelector(".v");
@@ -186,7 +186,7 @@ module.exports = {
       // ── 4. Table shape ───────────────────────────────────────────────────
       const ths = doc.querySelectorAll("#thead th");
       let trs = doc.querySelectorAll("#tbody tr");
-      t.eq("table has 15 column headers", ths.length, 15);
+      t.eq("table has 16 column headers", ths.length, 16);
       t.ok("table body has at least one row", trs.length > 0, `${trs.length} rows`);
       t.ok("every row has a full cell set (matches header count)",
         [...trs].every(tr => tr.children.length === ths.length),
@@ -210,10 +210,10 @@ module.exports = {
         t.ok("longest series path spans the plot area, not crammed at the left edge (>= 1200 of ~1304px)",
           span >= 1200, `longest path spans ${span.toFixed(0)}px`);
 
-        // ── 7. All six subplot titles are present ─────────────────────────
+        // ── 7. All seven subplot titles are present ─────────────────────────
         const labels = [...svg.querySelectorAll("text")].map(tn => tn.textContent);
         for (const want of ["加權指數", "成交金額（億元）", "外資買賣超（億元）",
-                            "融資餘額（億元）", "融資增減（億元）"]) {
+                            "融資餘額（億元）", "融資增減（億元）", "融資維持率（%）"]) {
           t.ok(`panel title "${want}" is rendered in the SVG`, labels.includes(want));
         }
         // This one carries the rebase date, so it is a prefix match by design.
@@ -370,8 +370,8 @@ module.exports = {
         t.ok("candlestick series carries OHLC array data for > 1300 sessions",
           candles.length > 1300, `${candles.length} candles`);
         // 6 data series + 3 empty line series hosting the bar panels' bands
-        t.eq("all 9 series survive the chart-type toggle",
-          (chart.getOption().series || []).length, 9);
+        t.eq("all 10 series survive the chart-type toggle",
+          (chart.getOption().series || []).length, 10);
         t.ok("no errors after toggling chart type", errors.length === 0,
           errors.slice(0, 3).join(" || "));
 
@@ -630,7 +630,7 @@ module.exports = {
         const g = optOf().grid;
         t.ok("narrow: y-axis gutter shrinks", g[0].left < wideLeft,
           `${wideLeft}px → ${g[0].left}px`);
-        t.eq("narrow: still six panels", g.length, 6);
+        t.eq("narrow: still seven panels", g.length, 7);
         t.ok("narrow: panels remain vertically disjoint",
           g.every((x, i) => i === 0 || x.top >= g[i - 1].top + g[i - 1].height),
           g.map(x => `${x.top}+${x.height}`).join(" "));
@@ -638,8 +638,8 @@ module.exports = {
           parseInt(doc.getElementById("chart").style.height, 10) > 0,
           doc.getElementById("chart").style.height);
         t.ok("narrow: x labels drop the century to fit",
-          optOf().xAxis[5].axisLabel.formatter("2026-07-29") === "26/07",
-          optOf().xAxis[5].axisLabel.formatter("2026-07-29"));
+          optOf().xAxis[6].axisLabel.formatter("2026-07-29") === "26/07",
+          optOf().xAxis[6].axisLabel.formatter("2026-07-29"));
         t.ok("narrow: touch panning is disabled so the page can scroll",
           optOf().dataZoom[0].moveOnMouseMove === false,
           `moveOnMouseMove=${optOf().dataZoom[0].moveOnMouseMove}`);
@@ -735,12 +735,16 @@ module.exports = {
             ctx && !ctx.hidden, ctx ? `hidden=${ctx.hidden}` : "missing");
 
           const ctxRows = ctx ? [...ctx.querySelectorAll(".ctx-row")] : [];
-          t.eq("one strip per tracked metric", ctxRows.length, 5);
+          t.eq("one strip per tracked metric", ctxRows.length, 6);
 
           if (open && ctxRows.length) {
-            t.ok("every strip plots one dot per episode and marks exactly one",
-              ctxRows.every(r => r.querySelectorAll(".ctx-dot").length === eps.length &&
-                                 r.querySelectorAll(".ctx-dot.on").length === 1),
+            // The maintenance-ratio strip (last) only has episodes since 2022,
+            // when that series starts; earlier ones have no value to plot.
+            const withRatio = eps.filter(e => e.marginRatioLow !== null).length;
+            t.ok("every strip plots one dot per episode with a value and marks exactly one",
+              ctxRows.every((r, k) => r.querySelectorAll(".ctx-dot").length ===
+                                        (k === 5 ? withRatio : eps.length) &&
+                                      r.querySelectorAll(".ctx-dot.on").length === 1),
               ctxRows.map(r => r.querySelectorAll(".ctx-dot").length).join("/"));
 
             // Rank shown for 跌幅 must equal the count of deeper episodes, +1.

@@ -379,7 +379,7 @@
         <span><i class="dot" style="background:var(--c-up)"></i>買超</span>
         <span><i class="dot" style="background:var(--c-down)"></i>賣超</span>
         <span><i class="dot" style="background:var(--c-cum)"></i>累計買賣超</span>
-        <span><i class="dot" style="background:var(--c-margin)"></i>融資餘額</span>
+        <span><i class="dot" style="background:var(--c-margin)"></i>融資餘額 / 維持率</span>
         <span><i class="dot" style="background:var(--c-band-on)"></i>修正區間</span>
       </div>
     </div>
@@ -406,6 +406,9 @@
       <p><strong>融資殺盤幅度</strong> = 區間融資餘額減幅(%) ÷ 指數跌幅(%)。比值愈高代表散戶去槓桿愈徹底，
       一般認為 <strong>&gt; 1.5</strong> 時融資籌碼已清洗得較乾淨；色階愈深代表比值愈高，數值本身一律顯示，
       不以顏色單獨傳達資訊。</p>
+      <p><strong>大盤融資維持率</strong> = Σ（上市個股融資餘額張數 × 1000 × 當日收盤價）÷ 上市融資金額。
+      個股維持率低於 130% 會被追繳，大盤跌近此線時常伴隨斷頭賣壓；圖上虛線即為 130%。
+      本序列自 2022 年起（逐日全市場資料的起點），停牌個股以最近收盤價計。</p>
       <p>本欄僅描述已發生的籌碼變化，不構成任何投資建議，本專案亦不產生買賣訊號或目標價。</p>
       <p>資料來源：臺灣證券交易所（加權指數日 K、市場成交資訊、三大法人買賣金額、信用交易統計）。
       金額單位皆為新台幣億元。缺漏交易日在圖上以斷點呈現，不以 0 補值。</p>
@@ -488,6 +491,7 @@
   const deskFlow = () => rows.map(r=>gap(DESKS[desk].val(r)));
   let fgn = deskFlow();
   const mgn    = rows.map(r=>gap(r.marginBalanceYi));
+  const mRatio = rows.map(r=>gap(r.marginRatio));
   // Day-on-day margin change. A missing day on either side leaves a gap rather
   // than diffing across it.
   const mgnChg = rows.map((r,i)=>{
@@ -526,6 +530,9 @@
   // render a missing value as "— 億", which reads as a quantity rather than a gap.
   const yi  = (v,d=0)=> (v===null||v===undefined) ? '—' : nf(v,d)+' 億';
   const sgnYi = (v,d=0)=> (v===null||v===undefined) ? '—' : sgn(v,d)+' 億';
+  // An episode's lowest maintenance ratio, red once it is under the call line
+  const ratioLow = e => e.marginRatioLow===null||e.marginRatioLow===undefined ? '—'
+    : `<span class="${e.marginRatioLow<MARGIN_CALL?'neg':''}">${nf(e.marginRatioLow,1)}%</span>`;
   const fd  = d => d ? d.slice(0,4)+'/'+d.slice(5,7)+'/'+d.slice(8,10) : '—';
   // Correction detection lives in detect.js so the browser and verify.js run
   // the exact same code path.
@@ -577,10 +584,13 @@
   // eats a fifth of a 390px screen, and the full stack needs the page to scroll
   // rather than each panel being squashed.
   const NAMES = ['加權指數','成交金額（億元）','買賣超（億元）',
-                 '累計買賣超（億元）','融資增減（億元）','融資餘額（億元）'];
+                 '累計買賣超（億元）','融資增減（億元）','融資餘額（億元）','融資維持率（%）'];
   const CUM = 3;                 // computed title: desk name + rebase date
   const FLOW = 2;                // computed title: desk name
-  const MGN_CHG = 4, MGN = 5;
+  const MGN_CHG = 4, MGN = 5, MGN_RATIO = 6;
+  // Individual positions get a margin call below this; the market-wide ratio
+  // nearing it is when forced selling shows up.
+  const MARGIN_CALL = 130;
   const isNarrow = () => window.innerWidth <= 720;
 
   function layout(){
@@ -632,6 +642,8 @@
   });
   const valCommon = i => ({
     type:'value', gridIndex:i, scale:i===0,
+    ...(i===MGN_RATIO ? {min:v=>Math.min(MARGIN_CALL-10, Math.floor(v.min/10)*10),
+                         max:v=>Math.ceil(v.max/10)*10} : {}),
     // The sub-panels are 60-90px tall: three ticks, not a stack of seven
     splitNumber: i===0 ? 5 : 3,
     axisLine:{show:false}, axisTick:{show:false},
@@ -706,6 +718,7 @@
       ${li(deskName()+'累計', cumView[i]==='-' ? '—' : sgnYi(cumView[i],0), COLORS.cum)}
       ${li('融資餘額', yi(r.marginBalanceYi), COLORS.margin)}
       ${li('融資增減', mChg===null ? '—' : `<span style="color:${mChgColor}">${sgnYi(mChg,1)}</span>`, mChgColor)}
+      ${li('融資維持率', r.marginRatio===null||r.marginRatio===undefined ? '—' : nf(r.marginRatio,2)+'%', COLORS.margin)}
       ${band}</div>`;
   }
 
@@ -819,6 +832,15 @@
           areaStyle:{color:alpha(COLORS.margin,.10)},
           markArea: markAreaFor(episodes, false) },
 
+        // Not scale:true like the index — the 130% call line must stay in view
+        // so the distance to it reads at a glance.
+        { name:'融資維持率', type:'line', data:mRatio, xAxisIndex:MGN_RATIO, yAxisIndex:MGN_RATIO,
+          showSymbol:false, symbolSize:8, connectNulls:false,
+          lineStyle:{width:2, color:COLORS.margin},
+          markLine:{silent:true, symbol:'none', data:[{yAxis:MARGIN_CALL}],
+            lineStyle:{color:COLORS.down, width:1, type:'dashed'}, label:{show:false}},
+          markArea: markAreaFor(episodes, false) },
+
         // ECharts mis-places a markArea hosted on a bar series once dataZoom
         // filters the data: the bands drift by days to weeks against the
         // index panel. Hang the bar panels' bands on empty line series instead,
@@ -872,7 +894,8 @@
       item('外資累計', sgnYi(e.foreignSumYi,0), cls(e.foreignSumYi)),
       item('融資變化', e.marginChgYi===null||e.marginChgYi===undefined ? '—'
         : `${sgnYi(e.marginChgYi,0)} (${pct(e.marginChgPct,1)})`, cls(e.marginChgYi)),
-      item('融資殺盤幅度', e.killRatio===null||e.killRatio===undefined ? '—' : nf(e.killRatio,2))
+      item('融資殺盤幅度', e.killRatio===null||e.killRatio===undefined ? '—' : nf(e.killRatio,2)),
+      item('維持率低點', ratioLow(e))
     ].join('');
   }
 
@@ -989,18 +1012,23 @@
     for(let i=0;i<N;i++){ const h=HI(i); if(h!==null&&h>peak){peak=h;peakAt=dates[i];} }
     const lastClose = (()=>{ for(let i=N-1;i>=0;i--) if(rows[i].close!==null) return rows[i].close; return null; })();
     const curDD = (peak>0 && lastClose!==null) ? (lastClose-peak)/peak*100 : null;
+    // TWSE publishes per-stock margin hours after the close, so the newest
+    // session can lack a ratio; show the latest one that exists, dated.
+    const lastRatio = [...rows].reverse().find(r=>r.marginRatio!==null&&r.marginRatio!==undefined);
 
     const cards = [
       ['總修正次數', episodes.length, `門檻 ${(threshold*100).toFixed(0)}% · ${mode==='intraday'?'盤中高低':'收盤價'}`],
       ['平均跌幅', avg(episodes,e=>e.drawdownPct), '峰 → 谷', '%', 2],
       ['平均下跌天數', avg(episodes,e=>e.declineDays), '交易日', '', 0],
       ['平均收復天數', avg(done,e=>e.recoveryDays), done.length?`${done.length} 波已收復`:'尚無已收復波段', '', 0],
-      ['目前回檔幅度', curDD, peakAt?`距 ${fd(peakAt)} 高點`:'', '%', 2]
+      ['目前回檔幅度', curDD, peakAt?`距 ${fd(peakAt)} 高點`:'', '%', 2],
+      ['融資維持率', lastRatio ? nf(lastRatio.marginRatio,1)+'%' : null,
+        lastRatio ? `${fd(lastRatio.date)} · 追繳線 ${MARGIN_CALL}%` : '尚無資料']
     ];
     document.getElementById('kpis').innerHTML = cards.map(([k,v,n,unit,d])=>{
       const isPct = unit==='%';
       const cls = isPct && v!==null ? (v<0?'neg':'pos') : '';
-      const txt = v===null ? '—' : (typeof v==='number' && d!==undefined
+      const txt = v===null ? '—' : typeof v==='string' ? v : (typeof v==='number' && d!==undefined
         ? (isPct? sgn(v,d) : nf(v,d)) + (unit||'') : nf(v,0));
       return `<div class="kpi"><div class="k">${k}</div>
         <div class="v num ${cls}">${txt}</div><div class="n">${n||''}</div></div>`;
@@ -1019,7 +1047,8 @@
     {k:'declineDays',    t:'下跌天數',   fmt:v=>nf(v,0)+' 日', sup:'長', low:false},
     {k:'foreignSumYi',   t:'外資買賣超', fmt:v=>sgnYi(v,0),    sup:'多', low:true},
     {k:'marginChgPct',   t:'融資變化',   fmt:v=>sgn(v,1)+'%',  sup:'深', low:true},
-    {k:'killRatio',      t:'融資殺盤幅度', fmt:v=>nf(v,2),     sup:'高', low:false}
+    {k:'killRatio',      t:'融資殺盤幅度', fmt:v=>nf(v,2),     sup:'高', low:false},
+    {k:'marginRatioLow', t:'維持率低點', fmt:v=>nf(v,1)+'%',   sup:'低', low:true}
   ];
 
   function renderContext(){
@@ -1084,6 +1113,7 @@
         : `<span class="${e.foreignSumYi>=0?'pos':'neg'}">${sgn(e.foreignSumYi,0)}</span>`},
     {k:'marginChgYi',   t:'融資餘額變化', f:e=> e.marginChgYi===null?'—'
         : `<span class="${e.marginChgYi>=0?'pos':'neg'}">${sgn(e.marginChgYi,0)} (${sgn(e.marginChgPct,1)}%)</span>`},
+    {k:'marginRatioLow', t:'維持率低點', f:e=>ratioLow(e)},
     {k:'fwd1mPct', t:'谷底後1個月', f:e=>fwdCell(e.fwd1mPct)},
     {k:'fwd3mPct', t:'谷底後3個月', f:e=>fwdCell(e.fwd3mPct)},
     {k:'fwd1yPct', t:'谷底後1年',   f:e=>fwdCell(e.fwd1yPct)},
@@ -1339,7 +1369,7 @@
     const head = ['#','起日','訖日','高點','低點','跌幅%','下跌天數','收復天數',
       '區間日均量(億)','量能變化%','外資累計買賣超(億)','融資起點(億)','融資低點(億)',
       '融資變化(億)','融資變化%','谷底後1個月%','谷底後3個月%','谷底後1年%',
-      '融資殺盤幅度','狀態'];
+      '融資殺盤幅度','維持率低點%','維持率低點日','狀態'];
     const esc = v => (v===null||v===undefined) ? '' :
       (/[",\n]/.test(String(v)) ? '"'+String(v).replace(/"/g,'""')+'"' : String(v));
     const body = sortedEpisodes().map(({e,i})=>[
@@ -1350,7 +1380,7 @@
       e.foreignSumYi?.toFixed(0), e.marginStartYi?.toFixed(0), e.marginTroughYi?.toFixed(0),
       e.marginChgYi?.toFixed(0), e.marginChgPct?.toFixed(1),
       e.fwd1mPct?.toFixed(1), e.fwd3mPct?.toFixed(1), e.fwd1yPct?.toFixed(1),
-      e.killRatio?.toFixed(2),
+      e.killRatio?.toFixed(2), e.marginRatioLow?.toFixed(2), e.marginRatioLowDate,
       e.status==='ongoing' ? '進行中'
         : e.endReason==='tolerance' ? '容差收盤'
         : '創新高'
@@ -1386,7 +1416,7 @@
   const cov = META.coverage || {};
   document.getElementById('meta').textContent =
     `${META.start||dates[0]} ~ ${META.end||dates[N-1]} · ${N} 個交易日 · ` +
-    `籌碼覆蓋 成交${cov.turnover??'?'} / 外資${cov.foreign??'?'} / 融資${cov.margin??'?'}` +
+    `籌碼覆蓋 成交${cov.turnover??'?'} / 外資${cov.foreign??'?'} / 融資${cov.margin??'?'} / 維持率${cov.marginRatio??'?'}` +
     (META.generatedAt ? ` · 更新於 ${META.generatedAt.replace('T',' ')}` : '');
 
   recompute();
