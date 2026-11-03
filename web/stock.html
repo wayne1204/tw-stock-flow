@@ -26,7 +26,7 @@
     --c-margin:#9085e9;
     --c-holders:#c3c2b7;
     --c-big:#c98500;
-    --c-ma5:#f0efec; --c-ma20:#c98500; --c-ma60:#3987e5;
+    --c-ma5:#f0efec; --c-ma20:#c98500; --c-ma60:#3987e5; --c-ma240:#d4679f;
 
     /* Taiwan market convention: RED = up / buy, GREEN = down / sell. Sign is
        also carried by position above/below zero, never by colour alone. */
@@ -47,7 +47,7 @@
     color-scheme:light;
     --c-foreign:#2468c4; --c-trust:#a86a00; --c-dealer:#8f8e84; --c-margin:#6a5bd6;
     --c-holders:#45443e; --c-big:#a86a00;
-    --c-ma5:#1b1b18; --c-ma20:#a86a00; --c-ma60:#2468c4;
+    --c-ma5:#1b1b18; --c-ma20:#a86a00; --c-ma60:#2468c4; --c-ma240:#b2407c;
   }
   *{box-sizing:border-box}
   /* hidden must win over any display rule (.acct, .chips are flex) */
@@ -339,6 +339,7 @@
         <span><i class="dot" style="background:var(--c-ma5)"></i>MA5</span>
         <span><i class="dot" style="background:var(--c-ma20)"></i>MA20</span>
         <span><i class="dot" style="background:var(--c-ma60)"></i>MA60</span>
+        <span><i class="dot" style="background:var(--c-ma240)"></i>MA240</span>
         <span><i class="dot" style="background:var(--c-foreign)"></i>外資</span>
         <span><i class="dot" style="background:var(--c-trust)"></i>投信</span>
         <span><i class="dot" style="background:var(--c-dealer)"></i>自營商</span>
@@ -422,7 +423,7 @@
   function readColors(){ Object.assign(COLORS, {
     foreign:C('--c-foreign'), trust:C('--c-trust'), dealer:C('--c-dealer'),
     margin:C('--c-margin'), holders:C('--c-holders'), big:C('--c-big'),
-    ma5:C('--c-ma5'), ma20:C('--c-ma20'), ma60:C('--c-ma60'),
+    ma5:C('--c-ma5'), ma20:C('--c-ma20'), ma60:C('--c-ma60'), ma240:C('--c-ma240'),
     up:C('--c-up'), down:C('--c-down'),
     ink:C('--ink'), ink2:C('--ink-2'), ink3:C('--ink-3'), ink4:C('--ink-4'),
     line:C('--line'), line2:C('--line-2'), surface:C('--surface'), pointer:C('--axis-pointer'),
@@ -545,7 +546,7 @@
       while(j+1 < dates.length && dates[j+1] <= h.date) j++;
       weekAt[j] = h;
     }
-    return { rows, dates, weekAt, ma5:ma(5), ma20:ma(20), ma60:ma(60),
+    return { rows, dates, weekAt, ma5:ma(5), ma20:ma(20), ma60:ma(60), ma240:ma(240),
       ohlc: rows.map(r => [r.open,r.close,r.low,r.high].every(has) ? [r.open,r.close,r.low,r.high] : '-'),
       instTotal: rows.map(r => sumOf([r.foreign, r.trust, r.dealer])) };
   }
@@ -673,7 +674,7 @@
 
   // MA legend over the K panel, reading the selected session's values.
   // Clicking an entry hides or shows that line.
-  const MAS = {MA5:'ma5', MA20:'ma20', MA60:'ma60'};
+  const MAS = {MA5:'ma5', MA20:'ma20', MA60:'ma60', MA240:'ma240'};
   const maLegend = () => {
     const L = layout();
     return {data:Object.keys(MAS), top:L.grids[P.K].top-(L.narrow?20:19), right:L.right,
@@ -777,6 +778,7 @@
         line('MA5',  S.ma5,  0, COLORS.ma5,  {width:1}),
         line('MA20', S.ma20, 0, COLORS.ma20, {width:1}),
         line('MA60', S.ma60, 0, COLORS.ma60, {width:1}),
+        line('MA240', S.ma240, 0, COLORS.ma240, {width:1}),
 
         { name:'成交量', type:'bar', xAxisIndex:P.VOL, yAxisIndex:P.VOL, barMaxWidth:8,
           data: R.map((r,i)=>({value:gap(r.volume),

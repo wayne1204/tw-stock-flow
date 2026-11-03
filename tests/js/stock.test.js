@@ -176,7 +176,7 @@ module.exports = {
       // ── Chart click and MA legend ──
       const legend = () => chart.getOption().legend[0];
       const ma5 = fx.stock.daily.slice(-5).reduce((a, r) => a + r.close, 0) / 5;
-      t.eq("MA legend over the K panel", legend().data, ["MA5", "MA20", "MA60"]);
+      t.eq("MA legend over the K panel", legend().data, ["MA5", "MA20", "MA60", "MA240"]);
       t.eq("legend reads the selected session's MA", legend().formatter("MA5"),
         "MA5 " + ma5.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
       const d30 = fx.stock.daily[30];
@@ -184,6 +184,7 @@ module.exports = {
       chart.getZr().trigger("click", { offsetX: px, offsetY: py });
       t.eq("clicking a K bar selects its date", doc.getElementById("d-pick").value, d30.date);
       t.eq("and the legend follows it", legend().formatter("MA60"), "MA60");   // < 60 sessions in
+      t.eq("MA240 is blank until 240 sessions exist", legend().formatter("MA240"), "MA240");
       doc.getElementById("d-latest").click();
 
       // ── 法人 toggles ──
