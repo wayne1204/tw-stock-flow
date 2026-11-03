@@ -434,25 +434,82 @@ class TestFetchMarginDay(NetworkGuardedTestCase):
 
 class TestMarginRatio(NetworkGuardedTestCase):
 
+    def _market(self, days):
+        bal = {d: fetch_data.fetch_margin_day(d.replace("-", ""), rebuild_only=True)["marginBalanceYi"]
+               for d in days}
+        return fetch_data.margin_market_by_day(days, bal, rebuild_only=True), bal
+
     def test_ratio_on_the_2024_08_05_crash_day(self):
         # Widely reported at about 148% the day the TAIEX fell 8.4%.
-        days = ["2024-08-02", "2024-08-05"]
-        coll = fetch_data.margin_collateral_by_day(days, rebuild_only=True)
-        bal = fetch_data.fetch_margin_day("20240805", rebuild_only=True)["marginBalanceYi"]
-        ratio = fetch_data.margin_ratio(coll["2024-08-05"], bal)
+        mkt, bal = self._market(["2024-08-02", "2024-08-05"])
+        ratio = fetch_data.margin_ratio(mkt["2024-08-05"]["collateralYi"], bal["2024-08-05"])
         self.assertGreater(ratio, 145)
         self.assertLess(ratio, 151)
 
+    def test_ex_etf_fields_start_consistent_with_the_total(self):
+        # Day one starts every stock at the market's own ratio, so excluding
+        # ETFs cannot move it yet; the ETF loan is a small, positive slice.
+        mkt, bal = self._market(["2022-01-03"])
+        f = fetch_data.margin_fields(mkt["2022-01-03"], bal["2022-01-03"])
+        self.assertAlmostEqual(f["marginRatioExEtf"], f["marginRatio"], places=1)
+        self.assertGreater(f["marginBalanceExEtfYi"], bal["2022-01-03"] * 0.9)
+        self.assertLess(f["marginBalanceExEtfYi"], bal["2022-01-03"])
+
     def test_days_before_the_series_start_are_absent(self):
-        coll = fetch_data.margin_collateral_by_day(["2021-12-30"], rebuild_only=True)
-        self.assertEqual(coll, {})
+        mkt, _ = self._market(["2021-12-30"])
+        self.assertEqual(mkt, {})
 
     def test_missing_side_gives_none_not_zero(self):
         self.assertIsNone(fetch_data.margin_ratio(None, 3000))
         self.assertIsNone(fetch_data.margin_ratio(4500, None))
         self.assertIsNone(fetch_data.margin_ratio(4500, 0))
         self.assertEqual(fetch_data.margin_ratio(4500, 3000), 150.0)
+        self.assertIsNone(fetch_data.margin_fields(None, 3000)["marginRatioExEtf"])
 
+
+class TestMarginBook(unittest.TestCase):
+
+    def test_new_borrowing_is_at_the_day_price_times_the_rate(self):
+        b = fetch_data.MarginBook(0.6)
+        b.step("X", 0, 10, 100.0)                    # 10 lots bought at 100
+        self.assertAlmostEqual(b.loan["X"], 10 * 1000 * 100 * 0.6)
+        self.assertAlmostEqual(b.ratio("X"), 166.67, places=2)   # at cost: 1 / 0.6
+        b.step("X", 10, 10, 78.0)                    # price falls 22%
+        self.assertAlmostEqual(b.ratio("X"), 130.0, places=2)
+
+    def test_repayment_keeps_the_average_cost(self):
+        b = fetch_data.MarginBook(0.6)
+        b.step("X", 0, 10, 100.0)
+        b.step("X", 10, 20, 200.0)                   # avg loan per lot now 90k
+        b.step("X", 20, 10, 150.0)                   # half repaid
+        self.assertAlmostEqual(b.loan["X"], 10 * 90_000)
+
+    def test_a_guessed_start_is_withheld_for_the_warmup(self):
+        b = fetch_data.MarginBook(0.6, warmup=3)
+        for _ in range(3):
+            b.step("X", 10, 10, 100.0)
+            self.assertIsNone(b.ratio("X"))
+        b.step("X", 10, 10, 100.0)
+        self.assertIsNotNone(b.ratio("X"))
+
+    def test_split_changes_lots_but_not_the_loan(self):
+        b = fetch_data.MarginBook(0.6)
+        b.step("X", 0, 10, 100.0)
+        loan = b.loan["X"]
+        b.step("X", 40, 40, 25.0)                    # 1:4 split: prev already 40
+        self.assertAlmostEqual(b.loan["X"], loan)
+        self.assertAlmostEqual(b.ratio("X"), 166.67, places=2)
+
+    def test_closing_out_resets_to_exact(self):
+        b = fetch_data.MarginBook(0.6, warmup=50)
+        b.step("X", 10, 0, 100.0)
+        b.step("X", 0, 5, 80.0)
+        self.assertAlmostEqual(b.ratio("X"), 166.67, places=2)
+
+    def test_etf_codes(self):
+        self.assertTrue(fetch_data.is_etf("0050"))
+        self.assertTrue(fetch_data.is_etf("00940"))
+        self.assertFalse(fetch_data.is_etf("2330"))
 
 if __name__ == "__main__":
     unittest.main()

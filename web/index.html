@@ -372,6 +372,10 @@
           <button data-v="dealer">自營商</button>
           <button data-v="total">合計</button>
         </div>
+        <div class="seg seg-sm chart-float" id="seg-etf" role="group" aria-label="融資是否含 ETF">
+          <button data-v="incl" aria-pressed="true">含 ETF</button>
+          <button data-v="excl">排除 ETF</button>
+        </div>
       </div>
       <div class="legend">
         <span><i class="dot" id="lg-index" style="background:var(--c-index)"></i>加權指數</span>
@@ -408,7 +412,9 @@
       不以顏色單獨傳達資訊。</p>
       <p><strong>大盤融資維持率</strong> = Σ（上市個股融資餘額張數 × 1000 × 當日收盤價）÷ 上市融資金額。
       個股維持率低於 130% 會被追繳，大盤跌近此線時常伴隨斷頭賣壓；圖上虛線即為 130%。
-      本序列自 2022 年起（逐日全市場資料的起點），停牌個股以最近收盤價計。</p>
+      本序列自 2022 年起（逐日全市場資料的起點），停牌個股以最近收盤價計。
+      <strong>排除 ETF</strong>：交易所只公布融資金額總數，ETF 部分由每日融資張數變化推估（增加的張數以當日收盤價 × 6 成計入，
+      減少的按比例償還），再自總額扣除；切換後融資三個圖表、波段融資指標與 KPI 一起改變，2022 年前無此資料。</p>
       <p>本欄僅描述已發生的籌碼變化，不構成任何投資建議，本專案亦不產生買賣訊號或目標價。</p>
       <p>資料來源：臺灣證券交易所（加權指數日 K、市場成交資訊、三大法人買賣金額、信用交易統計）。
       金額單位皆為新台幣億元。缺漏交易日在圖上以斷點呈現，不以 0 補值。</p>
@@ -490,14 +496,28 @@
   };
   const deskFlow = () => rows.map(r=>gap(DESKS[desk].val(r)));
   let fgn = deskFlow();
-  const mgn    = rows.map(r=>gap(r.marginBalanceYi));
-  const mRatio = rows.map(r=>gap(r.marginRatio));
-  // Day-on-day margin change. A missing day on either side leaves a gap rather
-  // than diffing across it.
-  const mgnChg = rows.map((r,i)=>{
-    const m0 = i>0 ? rows[i-1].marginBalanceYi : null, m1 = r.marginBalanceYi;
-    return (m0===null||m0===undefined||m1===null||m1===undefined) ? null : +(m1-m0).toFixed(2);
-  });
+  // The margin view: as published, or with the ETF slice taken out. TWSE
+  // gives the loan only as a market total, so the ETF part is the pipeline's
+  // estimate and exists only from 2022; earlier days have no ex-ETF figure.
+  // Everything margin-related (panels, tooltip, KPI, episode metrics) reads
+  // `mrows`, so one switch moves all of it together.
+  let etf = 'incl';
+  const rowsExEtf = rows.map(r=>({...r,
+    marginBalanceYi: r.marginBalanceExEtfYi ?? null, marginRatio: r.marginRatioExEtf ?? null}));
+  let mrows = rows;
+  let mgn, mRatio, mgnChg;
+  function buildMargin(){
+    mrows = etf === 'excl' ? rowsExEtf : rows;
+    mgn    = mrows.map(r=>gap(r.marginBalanceYi));
+    mRatio = mrows.map(r=>gap(r.marginRatio));
+    // Day-on-day margin change. A missing day on either side leaves a gap rather
+    // than diffing across it.
+    mgnChg = mrows.map((r,i)=>{
+      const m0 = i>0 ? mrows[i-1].marginBalanceYi : null, m1 = r.marginBalanceYi;
+      return (m0===null||m0===undefined||m1===null||m1===undefined) ? null : +(m1-m0).toFixed(2);
+    });
+  }
+  buildMargin();
 
   // Cumulative foreign net, rebased to the start of whatever window is in view.
   // Anchoring it to 2021-01 would make the line inside a zoomed episode read as a
@@ -537,7 +557,7 @@
   // Correction detection lives in detect.js so the browser and verify.js run
   // the exact same code path.
   const detect = (threshold, mode) =>
-    window.TaiexDetect.detectEpisodes(rows, threshold, mode, {tol: recoverTol});
+    window.TaiexDetect.detectEpisodes(mrows, threshold, mode, {tol: recoverTol});
 
   // ── State ─────────────────────────────────────────────────
   let threshold = 0.07, mode = 'close', chartType = 'candle';
@@ -592,6 +612,10 @@
   // nearing it is when forced selling shows up.
   const MARGIN_CALL = 130;
   const isNarrow = () => window.innerWidth <= 720;
+  const MARGIN_PANELS = [MGN_CHG, MGN, MGN_RATIO];
+  const etfTag = () => etf === 'excl' ? '（排除 ETF）' : '';
+  const panelTitle = (i, name) => i===CUM ? cumTitle() : i===FLOW ? deskName()+name
+    : MARGIN_PANELS.includes(i) && etf === 'excl' ? name + ' · 排除 ETF' : name;
 
   function layout(){
     const narrow = isNarrow();
@@ -716,9 +740,9 @@
             v===null||v===undefined ? '—' : `<span style="color:${c}">${sgnYi(v,1)}</span>`, c);
         }).join('')}
       ${li(deskName()+'累計', cumView[i]==='-' ? '—' : sgnYi(cumView[i],0), COLORS.cum)}
-      ${li('融資餘額', yi(r.marginBalanceYi), COLORS.margin)}
+      ${li('融資餘額'+etfTag(), yi(mrows[i].marginBalanceYi), COLORS.margin)}
       ${li('融資增減', mChg===null ? '—' : `<span style="color:${mChgColor}">${sgnYi(mChg,1)}</span>`, mChgColor)}
-      ${li('融資維持率', r.marginRatio===null||r.marginRatio===undefined ? '—' : nf(r.marginRatio,2)+'%', COLORS.margin)}
+      ${li('融資維持率'+etfTag(), mrows[i].marginRatio===null||mrows[i].marginRatio===undefined ? '—' : nf(mrows[i].marginRatio,2)+'%', COLORS.margin)}
       ${band}</div>`;
   }
 
@@ -765,7 +789,7 @@
       animation:false,
       textStyle:{fontFamily:'Inter, "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif'},
       title: L.grids.map((g,i)=>({
-        text: i===CUM ? cumTitle() : i===FLOW ? deskName()+g.name : g.name, left:L.narrow?8:L.left+4, top:g.top-(L.narrow?19:17),
+        text: panelTitle(i, g.name), left:L.narrow?8:L.left+4, top:g.top-(L.narrow?19:17),
         textStyle:{color:COLORS.ink3, fontSize:L.narrow?10:11.5, fontWeight:500}
       })),
       grid: L.grids.map(g=>({left:L.left, right:L.right, top:g.top, height:g.height})),
@@ -855,6 +879,10 @@
     const deskSeg = document.getElementById('seg-desk');
     deskSeg.style.top   = (L.grids[FLOW].top - 30) + 'px';
     deskSeg.style.right = L.right + 'px';
+    // ...and the ETF switch on the first margin panel's, covering all three.
+    const etfSeg = document.getElementById('seg-etf');
+    etfSeg.style.top   = (L.grids[MGN_CHG].top - 30) + 'px';
+    etfSeg.style.right = L.right + 'px';
     syncStartInput();
     renderEpisodeNav();
 
@@ -1014,7 +1042,7 @@
     const curDD = (peak>0 && lastClose!==null) ? (lastClose-peak)/peak*100 : null;
     // TWSE publishes per-stock margin hours after the close, so the newest
     // session can lack a ratio; show the latest one that exists, dated.
-    const lastRatio = [...rows].reverse().find(r=>r.marginRatio!==null&&r.marginRatio!==undefined);
+    const lastRatio = [...mrows].reverse().find(r=>r.marginRatio!==null&&r.marginRatio!==undefined);
 
     const cards = [
       ['總修正次數', episodes.length, `門檻 ${(threshold*100).toFixed(0)}% · ${mode==='intraday'?'盤中高低':'收盤價'}`],
@@ -1022,7 +1050,7 @@
       ['平均下跌天數', avg(episodes,e=>e.declineDays), '交易日', '', 0],
       ['平均收復天數', avg(done,e=>e.recoveryDays), done.length?`${done.length} 波已收復`:'尚無已收復波段', '', 0],
       ['目前回檔幅度', curDD, peakAt?`距 ${fd(peakAt)} 高點`:'', '%', 2],
-      ['融資維持率', lastRatio ? nf(lastRatio.marginRatio,1)+'%' : null,
+      ['融資維持率'+etfTag(), lastRatio ? nf(lastRatio.marginRatio,1)+'%' : null,
         lastRatio ? `${fd(lastRatio.date)} · 追繳線 ${MARGIN_CALL}%` : '尚無資料']
     ];
     document.getElementById('kpis').innerHTML = cards.map(([k,v,n,unit,d])=>{
@@ -1315,6 +1343,10 @@
   // the table and the selection are all unaffected, so skip the full recompute.
   segHandler('seg-desk',      v=>{ desk = v; cumView = buildCum(cumBase); }, renderChart);
   segHandler('seg-ov',        v=>{ ovAlign = v; }, renderOverlay);
+  // Excluding ETFs changes the episodes' margin metrics, but not which
+  // episodes exist (those come from prices), so the selection and zoom stay.
+  segHandler('seg-etf',       v=>{ etf = v; buildMargin(); episodes = detect(threshold, mode); },
+    ()=>{ renderKpis(); renderContext(); renderChart(); renderOverlay(); renderTable(); });
   // Switching line/candlestick doesn't change which episodes exist, so only the
   // chart is rebuilt — the table, the selection and the zoom all stay put.
   segHandler('seg-chart',     v=>{ chartType = v; }, renderChart);
@@ -1357,8 +1389,7 @@
       // Partial merge: only series 3's data and its title change, so there is no
       // need to rebuild every grid while the user is still dragging.
       chart.setOption({
-        title: NAMES.map((n,i)=>({text: i===CUM ? cumTitle()
-                                          : i===FLOW ? deskName()+n : n})),
+        title: NAMES.map((n,i)=>({text: panelTitle(i, n)})),
         series: NAMES.map((_,i)=> i===CUM ? {data: cumView} : {})
       });
     }, 120);

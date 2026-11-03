@@ -10,6 +10,7 @@ Builds a daily series for EVERY listed (TWSE) and OTC (TPEx) stock and ETF
   1. Daily OHLC + volume       MI_INDEX             afterTrading/otc  day, whole market
   2. Institutional net         T86                  insti/dailyTrade  day, whole market
   3. Margin balance / change   MI_MARGN ALL         margin/balance    day, whole market
+     (+ estimated maintenance ratio, fetch_data.MarginBook)
   4. Shareholder distribution  norway.twsthr.info (both markets)      stock, weekly
 
   Tracked stocks only (one request per stock per session - too many for all)
@@ -698,17 +699,22 @@ def build_stock(code, name, days, market, tracked, rebuild_only=False, exchange=
             if b is not None:
                 brokers[label] = b
 
+    # Per-stock maintenance ratio: the loan is estimated (see fd.MarginBook),
+    # so the first MARGIN_WARMUP sessions after a guessed start stay blank.
+    book = fd.MarginBook(fd.FINANCING_RATE[exchange])
     daily = []
     for d in days:
         quotes, inst, mg = market[d]
         o, h, lo, c, vol = quotes[code]
         f, t, dl = inst.get(code) or [None, None, None]
         prev_bal, bal = mg.get(code) or [None, None]
+        book.step(code, prev_bal, bal, c)
         daily.append({
             "date": d, "open": o, "high": h, "low": lo, "close": c, "volume": vol,
             "foreign": lots(f), "trust": lots(t), "dealer": lots(dl),
             "marginBalance": bal,
             "marginChange": bal - prev_bal if bal is not None and prev_bal is not None else None,
+            "marginRatio": book.ratio(code),
             "mainForce": main.get(d),
         })
 

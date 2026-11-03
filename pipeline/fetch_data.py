@@ -434,16 +434,92 @@ def fetch_margin_day(ymd, rebuild_only=False):
 MARGIN_RATIO_START = "2022-01-01"
 
 
-def margin_collateral_by_day(trading_days, rebuild_only=False):
-    """
-    Market value of every TWSE-listed margin position, in NT$100M:
-    sum(margin lots x 1000 x close). Divided by the market margin balance
-    (融資金額) this is the market-wide maintenance ratio (大盤融資維持率) as
-    brokers and the press quote it.
+# Share of the purchase price a margin buyer borrows (融資成數).
+FINANCING_RATE = {"TWSE": 0.6, "TPEx": 0.5}
 
-    A stock with no trade that day (suspended, illiquid) is valued at its last
-    seen close; one never seen in this run is left out. Days before
-    MARGIN_RATIO_START, or whose whole-market tables are missing, are absent.
+# Sessions before a per-stock ratio is trusted when its loan had to be guessed:
+# enough for most of the opening balance to have turned over.
+MARGIN_WARMUP = 60
+
+SHARES_PER_LOT = 1000
+
+
+def is_etf(code):
+    """TWSE/TPEx ETF codes (stock, bond, leveraged, active) all start with 00."""
+    return code.startswith("00")
+
+
+class MarginBook:
+    """
+    Estimated outstanding margin loan per stock, in NT dollars.
+
+    TWSE publishes the loan amount (融資金額) only as a market total; per stock
+    there are just lots. The loan is rebuilt from the daily balance change: a
+    rise is new borrowing at that day's close x the financing rate, a fall
+    repays the same share of the loan (positions close at their average cost).
+    Summed over every listed stock this tracks the published total within a
+    few percent, and its ETF slice agrees with what WantGoo shows.
+
+    A stock first seen already holding margin has an unknown cost; its loan
+    starts at `init_ratio` (market value / loan) and its ratio is withheld for
+    `warmup` sessions, until most of that guess has been repaid. A stock first
+    seen with no margin, or whose margin went to zero, is exact.
+    """
+
+    def __init__(self, rate, init_ratio=None, warmup=MARGIN_WARMUP):
+        self.rate = rate
+        self.init_ratio = init_ratio or 1 / rate      # default: bought at today's price
+        self.warmup = warmup
+        self.loan, self.lots, self.close, self.guessed = {}, {}, {}, {}
+
+    def step(self, code, prev, bal, close):
+        """One session's margin balance (lots before and after) for `code`."""
+        if close is not None:
+            self.close[code] = close
+        px = self.close.get(code)
+        if prev is None or bal is None:
+            return
+        if code not in self.loan:
+            if prev > 0 and px is None:
+                return                               # no price yet to value it
+            self.loan[code] = prev * SHARES_PER_LOT * px / self.init_ratio if prev > 0 else 0.0
+            # +1: this session is counted down below like every later one
+            self.guessed[code] = self.warmup + 1 if prev > 0 and self.warmup else 0
+        loan = self.loan[code]
+        if bal > prev and px is not None:
+            loan += (bal - prev) * SHARES_PER_LOT * px * self.rate
+        elif bal < prev:
+            loan = loan * bal / prev if prev > 0 else 0.0
+        if bal == 0:
+            loan, self.guessed[code] = 0.0, 0
+        elif self.guessed[code]:
+            self.guessed[code] -= 1
+        self.loan[code], self.lots[code] = loan, bal
+
+    def value(self, code):
+        """Market value of the margin position, NT dollars."""
+        px = self.close.get(code)
+        return self.lots.get(code, 0) * SHARES_PER_LOT * px if px is not None else 0.0
+
+    def ratio(self, code):
+        """Maintenance ratio in percent, or None (no margin, or still warming up)."""
+        loan = self.loan.get(code)
+        if not loan or self.guessed.get(code) or not self.lots.get(code):
+            return None
+        return round(self.value(code) / loan * 100, 2)
+
+
+def margin_market_by_day(trading_days, balances, rebuild_only=False):
+    """
+    Per day: {"collateralYi", "etfCollateralYi", "etfLoanYi"} for TWSE-listed
+    margin, NT$100M. Collateral is sum(lots x 1000 x close); divided by the
+    published balance (融資金額) it is the market maintenance ratio
+    (大盤融資維持率) as brokers and the press quote it.
+
+    The ETF loan is a MarginBook estimate, started at the market's own ratio on
+    the first day, so the ex-ETF split needs no warm-up. A stock with no trade
+    is valued at its last close. Days before MARGIN_RATIO_START, or whose
+    whole-market tables are missing, are absent.
     """
     # fetch_stocks imports this module as `fetch_data`. Run as a script we are
     # `__main__`, so register under that name too, or the import would build a
@@ -452,26 +528,56 @@ def margin_collateral_by_day(trading_days, rebuild_only=False):
         sys.modules.setdefault("fetch_data", sys.modules[__name__])
     import fetch_stocks as fs
 
-    out, last_close = {}, {}
+    out, book = {}, None
     for d in trading_days:
         if d < MARGIN_RATIO_START:
             continue
         ymd = d.replace("-", "")
         quotes, _ = fs.fetch_quotes_day(ymd, rebuild_only)
         lots = fs.fetch_margin_all_day(ymd, rebuild_only)
+        if book is None:
+            book = MarginBook(FINANCING_RATE["TWSE"], warmup=0)
         for code, q in quotes.items():
             if q[3] is not None:
-                last_close[code] = q[3]
+                book.close[code] = q[3]
         if not quotes or not lots:
             continue
-        total = 0.0
-        for code, (_, bal) in lots.items():
-            close = last_close.get(code)
-            if bal and close is not None:
-                total += bal * fs.LOTS * close
-        if total > 0:
-            out[d] = total / 1e8
+        if not book.loan:
+            # First usable day: start every stock at the market's ratio, so the
+            # estimated loans add up to the published balance.
+            mv = sum(bal * SHARES_PER_LOT * book.close[c]
+                     for c, (_, bal) in lots.items() if bal and c in book.close)
+            if not mv or not balances.get(d):
+                continue
+            book.init_ratio = mv / (balances[d] * 1e8)
+        for code, (prev, bal) in lots.items():
+            book.step(code, prev, bal, None)
+        coll = etf_coll = etf_loan = 0.0
+        for code in lots:
+            v = book.value(code)
+            coll += v
+            if is_etf(code):
+                etf_coll += v
+                etf_loan += book.loan.get(code, 0.0)
+        if coll > 0:
+            out[d] = {"collateralYi": coll / 1e8, "etfCollateralYi": etf_coll / 1e8,
+                      "etfLoanYi": etf_loan / 1e8}
     return out
+
+
+def margin_fields(mkt, balance_yi):
+    """
+    The market ratio, plus the ex-ETF balance and ratio (published balance less
+    the estimated ETF loan). All None where the day has no whole-market data.
+    """
+    if not mkt or not balance_yi:
+        return {"marginRatio": None, "marginBalanceExEtfYi": None, "marginRatioExEtf": None}
+    ex_bal = balance_yi - mkt["etfLoanYi"]
+    return {
+        "marginRatio": margin_ratio(mkt["collateralYi"], balance_yi),
+        "marginBalanceExEtfYi": round(ex_bal, 2),
+        "marginRatioExEtf": margin_ratio(mkt["collateralYi"] - mkt["etfCollateralYi"], ex_bal),
+    }
 
 
 def margin_ratio(collateral_yi, balance_yi):
@@ -556,7 +662,8 @@ def main():
     # same ones. Only a day it has not seen yet costs two requests here.
     print("\n      Margin maintenance ratio (whole-market tables from "
           f"{MARGIN_RATIO_START[:7]})", flush=True)
-    collateral = margin_collateral_by_day(trading_days, args.rebuild)
+    mkt = margin_market_by_day(
+        trading_days, {d: m.get("marginBalanceYi") for d, m in margin.items()}, args.rebuild)
 
     # --- Stage 3: merge and write -------------------------------------------
     print("\n[3/3] Merging")
@@ -579,7 +686,7 @@ def main():
             **{k: flows.get(d, {}).get(k)
                for k in ("foreignNetYi", "trustNetYi", "dealerNetYi")},
             "marginBalanceYi": m.get("marginBalanceYi"),
-            "marginRatio": margin_ratio(collateral.get(d), m.get("marginBalanceYi")),
+            **margin_fields(mkt.get(d), m.get("marginBalanceYi")),
         })
 
     # Fold this run's range into whatever the previous run wrote. --start names

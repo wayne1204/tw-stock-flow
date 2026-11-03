@@ -127,9 +127,11 @@ module.exports = {
 
       const chart = window.echarts.getInstanceByDom(doc.getElementById("chart"));
       const opt = chart.getOption();
-      t.eq("8 stacked panels", opt.grid.length, 8);
+      t.eq("9 stacked panels", opt.grid.length, 9);
       const series = name => opt.series.find(s => s.name === name);
       t.ok("candlestick present", series("日K") && series("日K").type === "candlestick");
+      t.ok("maintenance ratio panel carries the 130% call line",
+        series("融資維持率") && series("融資維持率").markLine.data[0].yAxis === 130);
       t.ok("missing dealer day is a gap, not 0", series("自營商").data[40] === "-");
       t.ok("main force before coverage is a gap", series("主力買賣超").data[0] === "-");
       const hold = series("股東人數").data.filter(v => v !== "-").length;

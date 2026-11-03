@@ -344,7 +344,7 @@
         <span><i class="dot" style="background:var(--c-dealer)"></i>自營商</span>
         <span><i class="dot" style="background:var(--c-up)"></i>買超 / 增加</span>
         <span><i class="dot" style="background:var(--c-down)"></i>賣超 / 減少</span>
-        <span><i class="dot" style="background:var(--c-margin)"></i>融資餘額</span>
+        <span><i class="dot" style="background:var(--c-margin)"></i>融資餘額 / 維持率</span>
         <span><i class="dot" style="background:var(--c-holders)"></i>股東人數</span>
         <span><i class="dot" style="background:var(--c-big)"></i>大戶人數</span>
       </div>
@@ -394,6 +394,9 @@
       <p><strong>主力買賣超</strong> = 當期買超前 15 名券商分點合計 − 賣超前 15 名合計（富邦 e-Broker 定義）；
       日序列以每日分點表回補整段期間。選擇過去日期時，近 1 日分點顯示當天資料，近 5/20 日統計只提供最新交易日。<strong>大戶</strong> = 集保持股 &gt; 400 張者，
       提示框另列 &gt; 1000 張。</p>
+      <p><strong>融資維持率（估）</strong> = 融資餘額市值 ÷ 估計融資金額。交易所只公布張數，融資金額由每日餘額變化推估：
+      增加的張數以當日收盤價 × 融資成數（上市 6 成、上櫃 5 成）計入，減少的張數按比例償還。
+      資料起點已有的餘額成本未知，前 60 個交易日不顯示；低於 130% 會被追繳（虛線）。</p>
       <p>資料來源：臺灣證券交易所與證券櫃檯買賣中心（每日收盤行情、三大法人買賣超、融資融券餘額）、
       神秘金字塔 norway.twsthr.info（集保股權分散）、富邦 e-Broker（主力進出）。
       缺漏以斷點呈現，不以 0 補值。本頁僅描述已發生的籌碼變化，不構成投資建議。</p>
@@ -547,6 +550,8 @@
       instTotal: rows.map(r => sumOf([r.foreign, r.trust, r.dealer])) };
   }
 
+  const MARGIN_CALL = 130;          // a position below this gets a margin call
+
   // ── KPI cards ─────────────────────────────────────────────
   function renderKpis(){
     // Everything on the cards is "as of" the selected session.
@@ -576,7 +581,8 @@
         sgn(mfRow ? mfRow.mainForce : null), `5 日 <span class="${cls(mf5)}">${sgn(mf5)}</span>`,
         cls(mfRow ? mfRow.mainForce : null)),
       card('融資餘額', nf(last.marginBalance),
-        `增減 <span class="${cls(last.marginChange)}">${sgn(last.marginChange)}</span> · 5 日 <span class="${cls(lastN('marginChange',5))}">${sgn(lastN('marginChange',5))}</span>`),
+        `增減 <span class="${cls(last.marginChange)}">${sgn(last.marginChange)}</span> · 5 日 <span class="${cls(lastN('marginChange',5))}">${sgn(lastN('marginChange',5))}</span>` +
+        ` · 維持率 <span class="${has(last.marginRatio) && last.marginRatio < MARGIN_CALL ? 'neg' : ''}">${has(last.marginRatio) ? nf(last.marginRatio,1)+'%' : '—'}</span>`),
       card(`股東人數${h1 ? ' · '+fd(h1.date).slice(5) : ''}`, nf(h1 && h1.holders),
         `較前週 <span class="${cls(hd('holders'))}">${sgn(hd('holders'))}</span>`),
       card('大戶人數 (>400張)', nf(h1 && h1.big400),
@@ -588,8 +594,8 @@
   // Stacked panels on one shared trading-day axis, each metric in its own
   // panel rather than sharing a dual y-axis.
   const NAMES = ['日 K','成交量（張）','三大法人買賣超（張）','主力買賣超（張）',
-                 '融資增減（張）','融資餘額（張）','股東人數','大戶人數（>400 張）'];
-  const P = {K:0, VOL:1, INST:2, MAIN:3, MCHG:4, MBAL:5, HOLD:6, BIG:7};
+                 '融資增減（張）','融資餘額（張）','融資維持率（%）','股東人數','大戶人數（>400 張）'];
+  const P = {K:0, VOL:1, INST:2, MAIN:3, MCHG:4, MBAL:5, MRATIO:6, HOLD:7, BIG:8};
   const LAST = NAMES.length - 1;
   const isNarrow = () => window.innerWidth <= 720;
 
@@ -641,6 +647,7 @@
       ${li('主力買賣超', sv(r.mainForce))}
       ${li('融資增減', sv(r.marginChange))}
       ${li('融資餘額', nf(r.marginBalance), COLORS.margin)}
+      ${li('融資維持率（估）', has(r.marginRatio) ? nf(r.marginRatio,1)+'%' : '—', COLORS.margin)}
       ${h ? `<div style="margin-top:6px;padding-top:5px;border-top:1px solid ${COLORS.line}">
         ${li('股東人數 '+fd(h.date).slice(5), nf(h.holders), COLORS.holders)}
         ${li('>400 張 人數 / 持股', `${nf(h.big400)} / ${nf(h.big400Pct,2)}%`, COLORS.big)}
@@ -732,6 +739,9 @@
       })),
       yAxis: all.map(i=>({
         type:'value', gridIndex:i, scale: i===P.K || i===P.MBAL || i===P.HOLD || i===P.BIG,
+        // Keep the 130% call line in view so the distance to it reads at a glance
+        ...(i===P.MRATIO ? {min:v=>Math.min(MARGIN_CALL-10, Math.floor(v.min/10)*10),
+                            max:v=>Math.ceil(v.max/10)*10} : {}),
         splitNumber: i===0 ? 5 : 3,
         axisLine:{show:false}, axisTick:{show:false}, splitLine:{lineStyle:{color:COLORS.line2}},
         axisLabel:{color:COLORS.ink3, fontSize:L.narrow?9:11, formatter:v=>{
@@ -778,6 +788,9 @@
         signBars('融資增減', R.map(r=>gap(r.marginChange)), P.MCHG),
         line('融資餘額', R.map(r=>gap(r.marginBalance)), P.MBAL, COLORS.margin,
           {areaStyle:{color:alpha(COLORS.margin,.10)}}),
+        line('融資維持率', R.map(r=>gap(r.marginRatio)), P.MRATIO, COLORS.margin,
+          {markLine:{silent:true, symbol:'none', data:[{yAxis:MARGIN_CALL}],
+            lineStyle:{color:COLORS.down, width:1, type:'dashed'}, label:{show:false}}}),
         // Weekly points on a daily axis: connect across the days in between.
         line('股東人數', weekly('holders'), P.HOLD, COLORS.holders, {connectNulls:true, showSymbol:true, symbolSize:4}),
         line('大戶人數', weekly('big400'), P.BIG, COLORS.big, {connectNulls:true, showSymbol:true, symbolSize:4}),

@@ -511,6 +511,26 @@ module.exports = {
             pick("foreign");
           }
 
+          // 含/排除 ETF moves all three margin panels and their titles together,
+          // and back again. Before 2022 there is no ex-ETF figure: a gap, not 0.
+          {
+            const etf = v => doc.querySelector(`#seg-etf button[data-v='${v}']`).click();
+            const ser = name => (chart.getOption().series || []).find(x => x.name === name);
+            const i = D.length - 1;
+            etf("excl");
+            t.ok("排除 ETF: balance and ratio switch to the ex-ETF series",
+              ser("融資餘額").data[i] === D[i].marginBalanceExEtfYi &&
+              ser("融資維持率").data[i] === D[i].marginRatioExEtf,
+              `${ser("融資餘額").data[i]} vs ${D[i].marginBalanceExEtfYi}`);
+            t.ok("排除 ETF: the three margin panel titles say so",
+              [4, 5, 6].every(k => titleAt(k).includes("排除 ETF")), [4, 5, 6].map(titleAt).join(" | "));
+            t.eq("排除 ETF: no figure before 2022 is a gap", ser("融資餘額").data[0], "-");
+            etf("incl");
+            t.ok("含 ETF: back to the published balance",
+              ser("融資餘額").data[i] === D[i].marginBalanceYi && !titleAt(5).includes("ETF"),
+              `${ser("融資餘額").data[i]} | ${titleAt(5)}`);
+          }
+
           // 融資增減 bars are the day-on-day change of 融資餘額.
           {
             const bars = (chart.getOption().series || [])[4];
