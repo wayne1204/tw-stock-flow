@@ -340,6 +340,66 @@ class TestTopList(Base):
         self.assertEqual([c for c, _, _ in fs.rank_top(market, days, {})], ["2330"])
 
 
+class TestMarginOnly(Base):
+    """--margin-only patches the newest session into built files, matching a full build."""
+
+    DAYS = ["2026-11-03", "2026-11-04", "2026-11-05"]
+    QUOTES = {"2327": [1, 2, 1, 100, 1000], "6488": [1, 2, 1, 50, 1000]}
+    MARGIN = [{"2327": [0, 10], "6488": [0, 4]}, {"2327": [10, 14], "6488": [4, 3]},
+              {"2327": [14, 12], "6488": [3, 5]}]
+
+    def build(self, code, margin, exchange="TWSE"):
+        market = {d: (self.QUOTES, {}, m) for d, m in zip(self.DAYS, margin)}
+        with patch.object(fs, "fetch_page", return_value=None), \
+             patch.object(fs, "load_previous", return_value={}):
+            return fs.build_stock(code, code, self.DAYS, market, tracked=False,
+                                  exchange=exchange)
+
+    def test_patch_matches_a_full_build(self):
+        full = self.build("2327", self.MARGIN)
+        s = self.build("2327", self.MARGIN[:2] + [{}])     # last day built before margin was out
+        self.assertIsNone(s["daily"][-1]["marginBalance"])
+        self.assertTrue(fs.patch_margin(s, self.MARGIN[2]))
+        self.assertEqual(s["daily"], full["daily"])
+        self.assertIsNotNone(s["daily"][-1]["marginRatio"])
+        self.assertFalse(fs.patch_margin(s, self.MARGIN[2]))  # nothing new: no rewrite
+
+    def test_unpublished_exchange_is_left_alone(self):
+        import shutil
+        import tempfile
+        out = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, out)
+        partial = self.MARGIN[:2] + [{}]
+        with patch.object(fs, "OUT_DIR", out):
+            fs.write_stock(self.build("2327", partial))
+            fs.write_stock(self.build("6488", partial, exchange="TPEx"))
+            with patch.object(fs, "fetch_margin_all_day", return_value={"2327": [14, 12]}), \
+                 patch.object(fs, "fetch_tpex_day", return_value=({}, {}, {}, {})), \
+                 patch("sys.stdout"):
+                fs.margin_only()
+            twse, tpex = fs.load_previous("2327"), fs.load_previous("6488")
+        self.assertEqual(twse["daily"][-1]["marginBalance"], 12)
+        self.assertIsNone(tpex["daily"][-1]["marginBalance"])
+
+    def test_stock_that_moved_to_twse_reads_the_twse_table(self):
+        import shutil
+        import tempfile
+        out = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, out)
+        # 6488 still says TPEx (it once traded there) but now lists on TWSE
+        with patch.object(fs, "OUT_DIR", out):
+            fs.write_stock(self.build("6488", self.MARGIN[:2] + [{}], exchange="TPEx"))
+            with patch.object(fs, "fetch_margin_all_day", return_value=self.MARGIN[2]), \
+                 patch.object(fs, "fetch_tpex_day", return_value=({}, {}, {}, {"5236": [1, 1]})), \
+                 patch("sys.stdout"):
+                fs.margin_only()
+            s = fs.load_previous("6488")
+        self.assertEqual(s["daily"][-1]["marginBalance"], 5)
+
+    def test_flag(self):
+        self.assertTrue(fs.parse_args(["--margin-only"]).margin_only)
+
+
 class TestWatchlist(Base):
     def test_comments_and_dupes(self):
         import tempfile

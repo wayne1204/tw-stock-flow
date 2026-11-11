@@ -38,6 +38,7 @@ Usage:
   python3 pipeline/fetch_stocks.py --start 2024-01     # narrower history (default 2022-01)
   python3 pipeline/fetch_stocks.py --refresh-top       # re-rank config/top200.txt, then fetch
   python3 pipeline/fetch_stocks.py --rebuild           # no requests; cache only
+  python3 pipeline/fetch_stocks.py --margin-only       # newest session's margin only (~1 min)
 
 Note: Chinese string literals below are matched against response payloads
 (column headers, page labels). They are data and must not be translated.
@@ -751,6 +752,71 @@ def write_stock(s):
                 + json.dumps(s, ensure_ascii=False, separators=(",", ":")) + ";\n")
 
 
+def patch_margin(s, rows):
+    """
+    Put the last session's margin (`rows`: {code: [prev_balance, balance]})
+    into an already-built stock `s`, in place. The maintenance ratio replays
+    fd.MarginBook over the file's own rows - each keeps its balance and change,
+    so the previous balance is recoverable and the replay matches build_stock.
+    Returns True if the last row changed.
+    """
+    code, daily = s["code"], s.get("daily") or []
+    if not daily:
+        return False
+    last = daily[-1]
+    before = (last.get("marginBalance"), last.get("marginChange"), last.get("marginRatio"))
+    prev_bal, bal = rows.get(code) or [None, None]
+    last["marginBalance"] = bal
+    last["marginChange"] = bal - prev_bal if bal is not None and prev_bal is not None else None
+    book = fd.MarginBook(fd.FINANCING_RATE[s.get("exchange", "TWSE")])
+    for r in daily:
+        b, chg = r.get("marginBalance"), r.get("marginChange")
+        book.step(code, b - chg if b is not None and chg is not None else None, b, r["close"])
+    last["marginRatio"] = book.ratio(code)
+    return (last["marginBalance"], last["marginChange"], last["marginRatio"]) != before
+
+
+def margin_only():
+    """
+    Patch the newest session's margin into every built stock file, without
+    rebuilding anything else. TWSE and TPEx publish margin around 20:45, after
+    the nightly run, so this fills it in for two requests and a rewrite.
+    """
+    t0 = time.time()
+    stocks = []
+    for f in sorted(os.listdir(OUT_DIR)):
+        if f.endswith(".js") and f != "index.js":
+            s = load_previous(f[:-3])
+            if s.get("daily"):
+                stocks.append(s)
+    if not stocks:
+        raise SystemExit("ERROR: no built stocks; run fetch_stocks.py without --margin-only first.")
+    d = max(s["daily"][-1]["date"] for s in stocks)
+    ymd = d.replace("-", "")
+    rows = {"TWSE": fetch_margin_all_day(ymd), "TPEx": fetch_tpex_day(ymd)[3]}
+    print(f"[MARGIN] {d}: TWSE {len(rows['TWSE'])} / TPEx {len(rows['TPEx'])} margin rows")
+    # Merged as build_stock merges them: a stock that moved from TPEx to TWSE
+    # keeps exchange "TPEx" but its margin row is in the TWSE table.
+    mg = {**rows["TWSE"], **rows["TPEx"]}
+    unpublished = [ex for ex, r in rows.items() if not r]
+
+    patched = 0
+    for s in stocks:
+        if s["daily"][-1]["date"] != d:
+            continue
+        # A code missing while an exchange has not published yet may just be
+        # unpublished: leave its margin alone rather than blank it.
+        if s["code"] not in mg and unpublished:
+            continue
+        if patch_margin(s, mg):
+            s["generatedAt"] = datetime.now().isoformat(timespec="seconds")
+            write_stock(s)
+            patched += 1
+    print(f"  patched {patched} of {len(stocks)} stock(s)"
+          + (f" · not published yet: {', '.join(unpublished)}" if unpublished else "")
+          + f" · {time.time() - t0:.0f} s")
+
+
 def write_index(watchlist, tracked=None):
     """
     The page's stock picker: every stock with an output file, watchlist first
@@ -792,6 +858,8 @@ def parse_args(argv=None):
                     help=f"months of broker day tables to fetch (default {DEFAULT_BROKER_MONTHS})")
     ap.add_argument("--refresh-top", action="store_true",
                     help=f"re-rank {os.path.basename(TOPLIST)} from the market data first")
+    ap.add_argument("--margin-only", action="store_true",
+                    help="only patch the newest session's margin into the built files")
     return ap.parse_args(argv)
 
 
@@ -807,6 +875,9 @@ def main():
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except OSError:
         print("another fetch_stocks.py run holds the lock; skipping")
+        return
+    if args.margin_only:
+        margin_only()
         return
 
     watchlist = read_watchlist()

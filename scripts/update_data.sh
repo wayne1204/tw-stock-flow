@@ -7,6 +7,8 @@
 #   scripts/update_data.sh --bundle         Also rebuild dist/taiex-atlas-standalone.html
 #   scripts/update_data.sh --commit         git-commit the data files if they changed
 #   scripts/update_data.sh --deploy         Publish to Cloudflare Pages (see run.sh deploy)
+#   scripts/update_data.sh --margin-only    Stocks: patch in the newest margin only (no rebuild,
+#                                           no backtest); for a run after margin is out (~20:45)
 #   scripts/update_data.sh --quiet          Log only; do not echo progress to stdout
 #
 # Environment:
@@ -37,6 +39,7 @@ MAX_LOG_BYTES=$((5 * 1024 * 1024))
 DO_BUNDLE=0
 DO_COMMIT=0
 DO_DEPLOY=0
+MARGIN_ONLY=0
 QUIET=0
 START_ARGS=()
 
@@ -46,6 +49,7 @@ while [[ $# -gt 0 ]]; do
     --commit) DO_COMMIT=1; shift ;;
     --deploy) DO_DEPLOY=1; shift ;;
     --quiet)  QUIET=1; shift ;;
+    --margin-only) MARGIN_ONLY=1; shift ;;
     --start)  START_ARGS=(--start "$2"); shift 2 ;;
     -h|--help) grep '^#' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "Unknown argument: $1" >&2; exit 2 ;;
@@ -101,7 +105,16 @@ fi
 
 # The watchlist is optional; a failure here is reported but does not block the
 # market-level refresh and deploy below.
-if [[ -s config/stocks.txt ]]; then
+if [[ -s config/stocks.txt ]] && (( MARGIN_ONLY )); then
+  # The rest of each stock file was built by the last full run; only margin
+  # was missing, so skip the rebuild and the backtest (it reads no margin).
+  if "$PYTHON" pipeline/fetch_stocks.py --margin-only >>"$LOG" 2>&1; then
+    say "  stock margin patched"
+  else
+    say "  WARNING: fetch_stocks.py --margin-only exited non-zero (see $LOG)"
+    echo "update_data.sh: fetch_stocks.py --margin-only failed; market data still updated" >&2
+  fi
+elif [[ -s config/stocks.txt ]]; then
   if "$PYTHON" pipeline/fetch_stocks.py >>"$LOG" 2>&1; then
     say "  watchlist stocks refreshed"
     # backtest.html's whole-market summary, rebuilt from the refreshed files.
