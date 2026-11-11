@@ -2,8 +2,8 @@
 """
 TW Stock Flow - TAIEX data fetcher
 
-Pulls four datasets from the Taiwan Stock Exchange (TWSE) public endpoints and
-merges them into a single daily series:
+Pulls the TWSE (and one TAIFEX) public datasets below and merges them into a
+single daily series:
 
   1. TAIEX daily OHLC        MI_5MINS_HIST   (monthly query)
   2. Market turnover         FMTQIK          (monthly query)
@@ -11,6 +11,8 @@ merges them into a single daily series:
   4. Margin & short stats    MI_MARGN        (single-day query)
   5. Margin maintenance ratio MI_MARGN ALL + MI_INDEX (single-day, whole market,
                               from 2022; shared with fetch_stocks.py's cache)
+  6. Futures net OI          TAIFEX 區分各期貨契約 (monthly CSV, 臺股期貨 foreign
+                              net open interest; TAIFEX serves only ~3 years)
 
 Outputs:
   web/data/taiex-daily.json          merged daily series
@@ -37,7 +39,7 @@ import random
 import re
 import sys
 import time
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 import requests
 
@@ -427,6 +429,149 @@ def fetch_margin_day(ymd, rebuild_only=False):
     return None
 
 
+# --------------------------------------------------------------------------
+# TAIFEX: institutional open interest in TAIEX futures (臺股期貨, TX)
+# --------------------------------------------------------------------------
+#
+# Not a TWSE endpoint: the futures exchange serves 三大法人「區分各期貨契約」 as a
+# CSV download over a POSTed date range. Two quirks shape the code below:
+#
+#   * it keeps only the last ~3 years - a range starting earlier is refused
+#     outright (日期時間錯誤 DateTime error) rather than clipped, so the start is
+#     clamped to the retention window and older months are never asked for;
+#   * a range ending after the newest published session is refused the same
+#     way, so the end steps back a day at a time until it lands on one.
+#
+# A range with no sessions in it answers 查無資料. Both refusals come back as a
+# small HTML page, not a CSV.
+
+TAIFEX_URL = "https://www.taifex.com.tw/cht/3/futContractsDateDown"
+TAIFEX_RETENTION_YEARS = 3
+TAIFEX_ENDPOINT = "TAIFEX_FUT"
+# 身份別 labels. Older files say 外資 rather than 外資及陸資.
+FUT_DESKS = (("外資", "foreign"), ("投信", "trust"), ("自營商", "dealer"))
+FUT_NET_OI_COL = 13          # 多空未平倉口數淨額
+
+
+def taifex_earliest(today):
+    """First day the download still serves (a day inside the window, to be safe)."""
+    y = today.year - TAIFEX_RETENTION_YEARS
+    try:
+        d = today.replace(year=y)
+    except ValueError:                 # 29 Feb with no leap day three years back
+        d = today.replace(year=y, day=28)
+    return d + timedelta(days=1)
+
+
+def parse_fut_csv(text):
+    """
+    The 區分各期貨契約 CSV -> {iso_date: {"foreign": lots, "trust": .., "dealer": ..}}.
+
+    Values are net open interest (long minus short) in contracts. A desk with
+    no row that day is absent, never 0.
+    """
+    out = {}
+    for line in text.splitlines()[1:]:
+        cols = [c.strip() for c in line.split(",")]
+        if len(cols) <= FUT_NET_OI_COL:
+            continue
+        d = parse_twse_date(cols[0])
+        desk = next((k for label, k in FUT_DESKS if label in cols[2]), None)
+        v = parse_num(cols[FUT_NET_OI_COL])
+        if d is None or desk is None or v is None:
+            continue
+        out.setdefault(d, {})[desk] = int(v)
+    return out
+
+
+def _taifex_get(start, end):
+    """
+    One POST. Returns ("ok", csv_text), ("empty", None) for 查無資料, or
+    ("range", None) when TAIFEX rejects the dates. Raises on anything else.
+    """
+    _stats["requests"] += 1
+    r = SESSION.post(TAIFEX_URL, timeout=30, headers={
+        "Referer": "https://www.taifex.com.tw/cht/3/futContractsDate",
+        "Accept": "text/csv,text/html;q=0.9,*/*;q=0.8",
+    }, data={
+        "queryStartDate": start.strftime("%Y/%m/%d"),
+        "queryEndDate": end.strftime("%Y/%m/%d"),
+        "commodityId": "TXF",
+    })
+    if r.status_code == 429 or r.status_code >= 500:
+        raise requests.HTTPError(f"HTTP {r.status_code}")
+    r.raise_for_status()
+    text = r.content.decode("cp950", errors="replace")
+    time.sleep(SLEEP_BASE + random.uniform(0, SLEEP_JITTER))
+    if not text.lstrip().startswith("<"):
+        return "ok", text
+    if "查無資料" in text:
+        return "empty", None
+    if "DateTime error" in text:
+        return "range", None
+    raise ValueError("unexpected HTML from TAIFEX (maintenance page?)")
+
+
+def fetch_futures_month(ym, rebuild_only=False, today=None):
+    """
+    Institutional net open interest in 臺股期貨 for one month, keyed by ISO date.
+
+    Cached under data/raw/TAIFEX_FUT/<YYYYMM>.json with the same staleness rule
+    as the TWSE monthly queries (see is_stale). Months entirely before the
+    retention window return {} without a request.
+    """
+    today = today or date.today()
+    cp = _cache_path(TAIFEX_ENDPOINT, ym)
+    cached = None
+    if os.path.exists(cp):
+        try:
+            with open(cp, "r", encoding="utf-8") as f:
+                cached = json.load(f)
+        except json.JSONDecodeError:
+            os.remove(cp)
+        else:
+            if rebuild_only or not is_stale(ym, cached):
+                _stats["cache_hits"] += 1
+                return cached.get("rows", {})
+            _stats["refreshed"] += 1
+    if rebuild_only:
+        return {}
+
+    first = date(int(ym[:4]), int(ym[4:]), 1)
+    last = (first.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
+    start, end = max(first, taifex_earliest(today)), min(last, today)
+    if start > end:
+        return {}
+
+    last_err = None
+    for attempt in range(MAX_RETRIES):
+        try:
+            # Walk the end back over unpublished days: today before ~15:00,
+            # plus a weekend or holiday behind it.
+            e = end
+            status, text = _taifex_get(start, e)
+            while status == "range" and e > start and (end - e).days < 7:
+                e -= timedelta(days=1)
+                status, text = _taifex_get(start, e)
+            if status == "range":
+                # Nothing published in this range yet; do not cache a guess.
+                return cached.get("rows", {}) if cached else {}
+            payload = ({"stat": "OK", "rows": parse_fut_csv(text)} if status == "ok"
+                       else {"stat": "查無資料", "_empty": True, "rows": {}})
+            payload["_fetchedOn"] = today.isoformat()
+            with open(cp, "w", encoding="utf-8") as f:
+                json.dump(payload, f, ensure_ascii=False)
+            return payload["rows"]
+        except Exception as err:  # noqa: BLE001 - same retry policy as fetch()
+            last_err = err
+            _stats["retries"] += 1
+            if attempt < MAX_RETRIES - 1:
+                time.sleep(2.0 * 2 ** attempt)
+    print(f"  !! {TAIFEX_ENDPOINT} {ym} failed after {MAX_RETRIES} attempts: {last_err}",
+          file=sys.stderr)
+    return cached.get("rows", {}) if cached else {}
+
+
 # The maintenance ratio needs every listed stock's margin lots and close, one
 # whole-market request each per day. fetch_stocks.py already caches both from
 # its default history start, so the series begins there rather than paying
@@ -665,6 +810,15 @@ def main():
     mkt = margin_market_by_day(
         trading_days, {d: m.get("marginBalanceYi") for d, m in margin.items()}, args.rebuild)
 
+    # TAIFEX keeps ~3 years, so only the months inside that window are asked;
+    # older ones are skipped without a request and stay null in the output.
+    print("\n      Foreign net open interest in TAIEX futures (TAIFEX, monthly, "
+          f"from {taifex_earliest(today).isoformat()[:7]})", flush=True)
+    futures = {}
+    for ym in months:
+        futures.update(fetch_futures_month(ym, args.rebuild, today))
+    print(f"  -> {len(futures)} sessions with futures positioning", flush=True)
+
     # --- Stage 3: merge and write -------------------------------------------
     print("\n[3/3] Merging")
     fetched = []
@@ -687,6 +841,7 @@ def main():
                for k in ("foreignNetYi", "trustNetYi", "dealerNetYi")},
             "marginBalanceYi": m.get("marginBalanceYi"),
             **margin_fields(mkt.get(d), m.get("marginBalanceYi")),
+            "foreignTxNetOI": futures.get(d, {}).get("foreign"),
         })
 
     # Fold this run's range into whatever the previous run wrote. --start names
@@ -716,6 +871,7 @@ def main():
             "dealer": sum(1 for r in merged if r["dealerNetYi"] is not None),
             "margin": sum(1 for r in merged if r["marginBalanceYi"] is not None),
             "marginRatio": sum(1 for r in merged if r.get("marginRatio") is not None),
+            "futures": sum(1 for r in merged if r.get("foreignTxNetOI") is not None),
         },
     }
     out_js = os.path.join(DATA_DIR, "taiex-daily.js")
@@ -734,6 +890,7 @@ def main():
   Foreign net      {c['foreign']}  ({c['foreign']/n*100:.1f}%)
   Margin balance   {c['margin']}  ({c['margin']/n*100:.1f}%)
   Margin ratio     {c['marginRatio']}  (from {MARGIN_RATIO_START})
+  Futures net OI   {c['futures']}  (TAIFEX keeps ~{TAIFEX_RETENTION_YEARS} years)
   Close cross-check {n - mismatch}/{n} match
   {_stats['requests']} requests / {_stats['cache_hits']} cache hits / {_stats['refreshed']} stale refreshed / {_stats['retries']} retries
   Elapsed {el/60:.1f} min

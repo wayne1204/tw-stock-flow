@@ -1,5 +1,5 @@
 /**
- * Browser-integration test for index.html.
+ * Browser-integration test for drawdown.html (大盤修正波段).
  *
  * Loads the real page into jsdom with the real ECharts library (SVG renderer,
  * since jsdom cannot rasterise canvas) and drives it exactly like a user
@@ -24,13 +24,13 @@ const read = p => fs.readFileSync(path.join(WEB, p), "utf8");
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 /**
- * Assemble index.html with the CDN script and local <script src> tags inlined
+ * Assemble a market page with the CDN script and local <script src> tags inlined
  * (so jsdom needs no network or subresource loading), the renderer switched
  * to svg, and a canvas/layout stub prepended so it runs before any page
  * script — including the one that calls echarts.init().
  */
-function buildHtml(dataJs = read("data/taiex-daily.js")) {
-  let html = read("index.html");
+function buildHtml(dataJs = read("data/taiex-daily.js"), page = "drawdown.html") {
+  let html = read(page);
 
   // ECharts measures text via canvas even under the SVG renderer, and jsdom
   // has no canvas. Stub a 2d context before any script runs; only
@@ -90,8 +90,9 @@ function buildHtml(dataJs = read("data/taiex-daily.js")) {
     `<script>${echartsSrc}</script>`);
   html = html.replace('<script src="data/taiex-daily.js"></script>',
     `<script>${dataJs}</script>`);
-  html = html.replace('<script src="js/detect.js"></script>',
-    `<script>${read("js/detect.js")}</script>`);
+  // Every other local script (detect.js, common.js, market-chart.js).
+  html = html.replace(/<script src="((?!https?:)[^"]+)"><\/script>/g,
+    (_, src) => `<script>${read(src)}</script>`);
 
   // jsdom has no canvas; ECharts' SVG renderer needs none.
   html = html.replace("renderer:'canvas'", "renderer:'svg'");
@@ -128,7 +129,7 @@ function openEpisodeDataJs() {
 }
 
 module.exports = {
-  name: "index.html — render & interaction",
+  name: "drawdown.html — render & interaction",
 
   needs() {
     try {
@@ -790,3 +791,6 @@ module.exports = {
     }
   }
 };
+
+// today.test.js boots index.html the same way.
+module.exports.buildHtml = buildHtml;

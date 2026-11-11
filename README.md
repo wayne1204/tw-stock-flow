@@ -2,9 +2,11 @@
 
 **線上版：<https://tw-stock-flow.pages.dev>**
 
-追蹤台股的資金流向，分三頁：
+追蹤台股的資金流向，分四頁：
 
-- **大盤**（`index.html`）：自 2017 年以來加權指數的每一次修正波段（峰谷法偵測），疊上成交金額、
+- **大盤今日**（`index.html`）：最新交易日的加權指數、成交金額、三大法人買賣超、融資餘額 / 維持率、
+  外資台指期淨未平倉（期交所，近 3 年），下方是近半年的 K 線與籌碼圖。
+- **修正波段**（`drawdown.html`）：自 2017 年以來加權指數的每一次修正波段（峰谷法偵測），疊上成交金額、
   三大法人買賣超、融資餘額與大盤融資維持率。
 - **個股籌碼**（`stock.html`）：所有上市櫃股票與 ETF 的日 K、三大法人、融資、股東結構；
   觀察清單與成交值前 200 名另有主力買賣超與券商分點。
@@ -16,7 +18,7 @@
 ![儀表板截圖](docs/screenshot.png)
 
 ```
-pipeline/fetch_data.py     →   web/data/taiex-daily.{json,js}   →   web/index.html
+pipeline/fetch_data.py     →   web/data/taiex-daily.{json,js}   →   web/index.html, web/drawdown.html
 pipeline/fetch_stocks.py   →   web/data/stocks/*.js             →   web/stock.html
 pipeline/build_market_backtest.js → web/data/market-backtest.js →   web/backtest.html
 ```
@@ -33,7 +35,7 @@ pipeline/build_market_backtest.js → web/data/market-backtest.js →   web/back
 
 首次抓取約 110 分鐘（三大法人與融資只能逐日查詢，需遵守 rate limit）；之後原始回應都快取在
 `web/data/raw/`，每天只補新交易日，數秒完成。`web/index.html` 也可直接以 `file://` 開啟。
-`python3 pipeline/bundle.py` 會產生內嵌 ECharts 與資料的單檔離線版 `dist/taiex-atlas-standalone.html`。
+`python3 pipeline/bundle.py` 會產生內嵌 ECharts 與資料的單檔離線版 `dist/taiex-today-standalone.html`（大盤今日）與 `dist/taiex-atlas-standalone.html`（修正波段）。
 
 ### 每日更新（cron）
 
@@ -45,7 +47,7 @@ pipeline/build_market_backtest.js → web/data/market-backtest.js →   web/back
 
 旗標：`--bundle` 重打包、`--commit` 資料有變才 commit、`--deploy` 發佈、`--start YYYY-MM`
 限縮抓取範圍。個股更新成功後會接著以 node 重建全市場回測（`NODE` 可指定路徑）。
-部署只上傳 `web/` 底下頁面用到的檔案（三個頁面、`js/detect.js`、`js/backtest.js`、`data/` 輸出）；
+部署只上傳 `web/` 底下頁面用到的檔案（四個頁面、`js/` 腳本、`data/` 輸出）；
 專案名稱可用 `CF_PAGES_PROJECT` 覆寫。
 
 ## 資料來源
@@ -208,12 +210,13 @@ npm test      # 全部；node tests/js/run.js detect 只跑名稱含 detect 的�
 | `tests/js/detect.test.js` | 演算法規則，跑在手工序列上 |
 | `tests/js/backtest.test.js` | 個股回測：進場規則、IC、五分位、有效樣本、因子定義 |
 | `tests/js/market.test.js` | 全市場回測的彙總，以及在 jsdom 中實際執行 `backtest.html` |
-| `tests/js/deploy.test.js` | 部署清單涵蓋頁面載入的腳本、頁尾部署戳記、三頁分頁列 |
+| `tests/js/deploy.test.js` | 部署清單涵蓋頁面載入的腳本、頁尾部署戳記、四頁分頁列 |
 | `tests/py/fetch_test.py` | 抓取腳本的解析與快取（不連網） |
 | `tests/py/stock_fetch_test.py` | 個股抓取的解析（不連網） |
 | `tests/js/stock.test.js` | 在 jsdom 中實際執行 `stock.html`（含模擬 API 的登入 / 自選流程） |
 | `tests/js/account.test.js` | 帳號後端：Google token 驗證、session、自選（SQLite 模擬 D1） |
-| `tests/js/render.test.js` | 在 jsdom 中實際執行 `index.html` |
+| `tests/js/render.test.js` | 在 jsdom 中實際執行 `drawdown.html` |
+| `tests/js/today.test.js` | 在 jsdom 中實際執行 `index.html`（大盤今日卡片、期貨面板） |
 | `tests/js/bundle.test.js` | `dist/` 是否落後於來源 |
 | `scripts/verify.js` | 真實資料完整性與已知波段比對 |
 
@@ -221,14 +224,17 @@ npm test      # 全部；node tests/js/run.js detect 只跑名稱含 detect 的�
 
 ```
 web/                 網站本體（部署根目錄，也可直接 file:// 開啟）
-  index.html         大盤儀表板（CDN 載入 ECharts）
+  index.html         大盤今日（CDN 載入 ECharts）
+  drawdown.html      大盤修正波段
   stock.html         個股籌碼頁
   backtest.html      全市場回測頁
+  js/common.js       配色、格式化、深淺色切換（大盤兩頁共用）
+  js/market-chart.js 大盤 K 線 + 籌碼疊圖（大盤兩頁共用）
   js/detect.js       修正波段偵測（網頁與 verify.js 共用）
   js/backtest.js     籌碼因子回測與除權還原（stock.html、全市場彙總與測試共用）
   data/              抓取輸出：taiex-daily.{json,js}、stocks/、market-backtest.js、raw/ 快取
 pipeline/            Python 資料管線
-  fetch_data.py      大盤抓取 + 快取 + 合併
+  fetch_data.py      大盤抓取（證交所 + 期交所）+ 快取 + 合併
   fetch_stocks.py    個股抓取
   bundle.py          打包單檔離線 HTML
   build_market_backtest.js  全市場回測彙總（node）

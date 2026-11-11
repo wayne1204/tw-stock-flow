@@ -511,5 +511,86 @@ class TestMarginBook(unittest.TestCase):
         self.assertTrue(fetch_data.is_etf("00940"))
         self.assertFalse(fetch_data.is_etf("2330"))
 
+
+# --------------------------------------------------------------------------
+# TAIFEX futures open interest
+# --------------------------------------------------------------------------
+
+FUT_CSV = (
+    "日期,商品名稱,身份別,多方交易口數,多方交易契約金額(千元),空方交易口數,空方交易契約金額(千元),"
+    "多空交易口數淨額,多空交易契約金額淨額(千元),多方未平倉口數,多方未平倉契約金額(千元),"
+    "空方未平倉口數,空方未平倉契約金額(千元),多空未平倉口數淨額,多空未平倉契約金額淨額(千元)\n"
+    "2026/11/10,臺股期貨,自營商,6096,51578924,7092,60170152,-996,-8591228,4909,41892172,4824,41164131,85,728041\n"
+    "2026/11/10,臺股期貨,投信,2986,25459249,20,170241,2966,25289008,101353,864463334,2834,24171753,98519,840291581\n"
+    "2026/11/10,臺股期貨,外資及陸資,86285,727977694,88046,742662545,-1761,-14684851,9875,84238258,113348,966831234,-103473,-882592976\n"
+    "2026/11/09,臺股期貨,外資,1,1,1,1,0,0,1,1,1,1,-99,0\n"
+)
+
+
+class TestFutures(NetworkGuardedTestCase):
+
+    def setUp(self):
+        super().setUp()
+        p = patch.object(fetch_data.SESSION, "post", side_effect=_fail_on_network_call)
+        p.start()
+        self.addCleanup(p.stop)
+        import tempfile
+        self.tmp = tempfile.mkdtemp()
+        p = patch.object(fetch_data, "RAW_DIR", self.tmp)
+        p.start()
+        self.addCleanup(p.stop)
+        p = patch.object(fetch_data.time, "sleep", lambda *_: None)
+        p.start()
+        self.addCleanup(p.stop)
+
+    def test_parses_net_open_interest_per_desk(self):
+        out = fetch_data.parse_fut_csv(FUT_CSV)
+        self.assertEqual(out["2026-11-10"], {"dealer": 85, "trust": 98519, "foreign": -103473})
+
+    def test_older_foreign_label_is_recognised(self):
+        self.assertEqual(fetch_data.parse_fut_csv(FUT_CSV)["2026-11-09"], {"foreign": -99})
+
+    def test_earliest_sits_inside_the_retention_window(self):
+        self.assertEqual(fetch_data.taifex_earliest(date(2026, 11, 11)), date(2023, 11, 12))
+        self.assertEqual(fetch_data.taifex_earliest(date(2028, 2, 29)), date(2025, 3, 1))
+
+    def test_month_before_retention_issues_no_request(self):
+        # The network guard would raise if this asked TAIFEX.
+        self.assertEqual(fetch_data.fetch_futures_month("201701", today=date(2026, 11, 11)), {})
+
+    def test_start_is_clamped_and_end_walks_back_over_unpublished_days(self):
+        calls = []
+        def fake(start, end):
+            calls.append((start, end))
+            return ("range", None) if end > date(2026, 11, 10) else ("ok", FUT_CSV)
+        with patch.object(fetch_data, "_taifex_get", side_effect=fake):
+            rows = fetch_data.fetch_futures_month("202611", today=date(2026, 11, 11))
+        self.assertEqual(calls, [(date(2026, 11, 1), date(2026, 11, 11)),
+                                 (date(2026, 11, 1), date(2026, 11, 10))])
+        self.assertEqual(rows["2026-11-10"]["foreign"], -103473)
+        with patch.object(fetch_data, "_taifex_get", side_effect=fake):
+            fetch_data.fetch_futures_month("202311", today=date(2026, 11, 11))
+        self.assertEqual(calls[-1][0], date(2023, 11, 12))
+
+    def test_open_month_is_refetched_and_closed_month_is_not(self):
+        with patch.object(fetch_data, "_taifex_get", return_value=("ok", FUT_CSV)) as g:
+            fetch_data.fetch_futures_month("202611", today=date(2026, 11, 11))
+            # Fetched during the month it covers: stale on the next run.
+            fetch_data.fetch_futures_month("202611", today=date(2026, 11, 12))
+            self.assertEqual(g.call_count, 2)
+        # Rebuild mode reads the cache and never asks.
+        self.assertIn("2026-11-10", fetch_data.fetch_futures_month("202611", rebuild_only=True))
+
+    def test_unpublished_range_is_not_cached(self):
+        with patch.object(fetch_data, "_taifex_get", return_value=("range", None)):
+            self.assertEqual(fetch_data.fetch_futures_month("202611", today=date(2026, 11, 2)), {})
+        self.assertFalse(os.path.exists(os.path.join(self.tmp, "TAIFEX_FUT", "202611.json")))
+
+    def test_no_sessions_is_cached_as_empty(self):
+        with patch.object(fetch_data, "_taifex_get", return_value=("empty", None)):
+            self.assertEqual(fetch_data.fetch_futures_month("202611", today=date(2026, 11, 1)), {})
+        self.assertTrue(os.path.exists(os.path.join(self.tmp, "TAIFEX_FUT", "202611.json")))
+
+
 if __name__ == "__main__":
     unittest.main()

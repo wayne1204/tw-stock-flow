@@ -13,7 +13,7 @@ const path = require("path");
 const ROOT = path.join(__dirname, "..", "..");
 const read = p => fs.readFileSync(path.join(ROOT, p), "utf8");
 const count = (s, needle) => s.split(needle).length - 1;
-const PAGES = ["index.html", "stock.html", "backtest.html"];
+const PAGES = ["index.html", "drawdown.html", "stock.html", "backtest.html"];
 
 module.exports = {
   name: "deploy — footer marker, shipped scripts, page tabs",
@@ -41,10 +41,10 @@ module.exports = {
     t.ok("run.sh deploys the market summary once it is built",
       run.includes("files+=(data/market-backtest.js)"));
     t.ok("run.sh stamps every staged page",
-      run.includes('s|<!--DEPLOYED-->|$stamp|" "$STAGE/index.html" "$STAGE/stock.html" "$STAGE/backtest.html"'));
+      run.includes('s|<!--DEPLOYED-->|$stamp|" "$STAGE/index.html" "$STAGE/drawdown.html" "$STAGE/stock.html" "$STAGE/backtest.html"'));
     for (const page of PAGES) {
       const tabs = (read(path.join("web", page)).match(/<nav class="tabs"[\s\S]*?<\/nav>/) || [""])[0];
-      t.eq(`${page} links all three pages`, [...tabs.matchAll(/href="([^"]+)"/g)].map(m => m[1]), PAGES);
+      t.eq(`${page} links all four pages`, [...tabs.matchAll(/href="([^"]+)"/g)].map(m => m[1]), PAGES);
       t.ok(`${page} marks itself current`, tabs.includes(`<a href="${page}" aria-current="page">`));
     }
   }

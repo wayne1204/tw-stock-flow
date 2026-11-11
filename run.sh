@@ -53,7 +53,7 @@ deploy() {
   export PATH="$(dirname "$wrangler"):$PATH"
 
   # Paths are relative to web/, the site root.
-  local files=(index.html stock.html backtest.html js/detect.js js/backtest.js data/taiex-daily.js) f
+  local files=(index.html drawdown.html stock.html backtest.html js/common.js js/market-chart.js js/detect.js js/backtest.js data/taiex-daily.js) f
   for f in "${files[@]}"; do
     [[ -s "web/$f" ]] || { echo "run.sh deploy: missing web/$f (run python3 pipeline/fetch_data.py)" >&2; exit 1; }
   done
@@ -81,7 +81,7 @@ deploy() {
   # and hidden, everywhere else: locally, over file:// and in the bundle).
   local stamp
   stamp="部署於 $(TZ=Asia/Taipei date '+%Y-%m-%d %H:%M')（台北時間）· $(git rev-parse --short HEAD)"
-  sed -i "s|<!--DEPLOYED-->|$stamp|" "$STAGE/index.html" "$STAGE/stock.html" "$STAGE/backtest.html"
+  sed -i "s|<!--DEPLOYED-->|$stamp|" "$STAGE/index.html" "$STAGE/drawdown.html" "$STAGE/stock.html" "$STAGE/backtest.html"
 
   # First deploy: create the project. "Already exists" is the normal case after.
   # --force keeps it a classic Pages project; wrangler 4.148+ otherwise hands

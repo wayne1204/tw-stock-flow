@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>台股大盤修正波段分析 · TW Stock Flow</title>
+<title>台股大盤今日 · TW Stock Flow</title>
 <!-- Inline so the icon survives file://, the offline bundle and the 3-file deploy:
      dashed prior high, a green fall to the trough, a red recovery back to it. -->
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231a1a19'/%3E%3Cpath d='M5 9H27' stroke='%238a897e' stroke-width='1.5' stroke-dasharray='2 2'/%3E%3Cpath d='M5 9L11 14L14 12L18 24' fill='none' stroke='%231baf7a' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M18 24L23 16L27 9' fill='none' stroke='%23e66767' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <script>
   // Before first paint, so a saved light theme never flashes dark. Shared by
-  // index.html and stock.html (same origin, same key).
+  // every page (same origin, same key).
   (function(){ var t; try { t = localStorage.getItem('atlas-theme'); } catch(e) {}
     document.documentElement.dataset.theme = t === 'light' ? 'light' : 'dark'; })();
 </script>
@@ -95,7 +95,7 @@
   .tabs svg{flex:0 0 auto}
   @media (max-width: 720px){
     .tabs{width:100%;margin-bottom:12px}
-    .tabs a{flex:1;justify-content:center;padding:8px 6px;font-size:13px;gap:5px}
+    .tabs a{flex:1;justify-content:center;padding:8px 4px;font-size:12.5px;gap:4px}
   }
   .controls{display:flex;flex-wrap:wrap;gap:18px;align-items:center}
   .ctrl-label{color:var(--ink-3);font-size:11px;text-transform:uppercase;letter-spacing:.06em;
@@ -127,13 +127,6 @@
   .panel-head .seg{background:var(--bg)}
   #chart{width:100%;height:900px}
   .btn-sm{padding:3px 10px;font-size:13px;line-height:1.3}
-  .ep-nav{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-  .ep-nav h2{margin-right:6px}
-  .ep-label{color:var(--ink-2);font-size:12.5px;min-width:9.5em;text-align:center}
-  .ep-sum{display:flex;flex-wrap:wrap;gap:4px 18px;margin:0 10px 6px;padding:8px 12px;
-    background:var(--bg);border:1px solid var(--line);border-radius:7px;font-size:12.5px}
-  .ep-sum span{white-space:nowrap}
-  .ep-sum b{color:var(--ink-3);font-weight:400;margin-right:5px}
   .panel-tools{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
   .date-pick{display:inline-flex;align-items:center;gap:7px;color:var(--ink-3);font-size:12px}
   .date-pick input{background:var(--bg);color:var(--ink);border:1px solid var(--line);
@@ -141,216 +134,97 @@
   .chart-wrap{position:relative}
   .chart-float{position:absolute;z-index:2;background:var(--bg)}
   .seg-sm button{padding:2px 9px;font-size:12px}
-  #overlay{width:100%;height:340px}
   .legend{display:flex;flex-wrap:wrap;gap:16px;padding:6px 14px 10px;color:var(--ink-3);font-size:12px}
   .legend span{display:inline-flex;align-items:center;gap:6px}
   .dot{width:9px;height:9px;border-radius:2px;display:inline-block}
 
-  /* ── Current-episode context ─────────────
-     One strip per metric: every episode is a dot, the open one is filled. Two
-     visual classes, not one per episode — identity comes from the row label and
-     the printed value, never from a hue. */
-  .ctx{background:var(--surface);border:1px solid var(--line);border-radius:10px;
-    padding:14px 16px 6px;margin-bottom:20px}
-  .ctx-head{display:flex;justify-content:space-between;align-items:baseline;
-    gap:12px;flex-wrap:wrap;margin-bottom:12px}
-  .ctx-sub{color:var(--ink-3);font-size:12px}
-  .ctx-row{display:grid;grid-template-columns:96px 1fr 104px 96px;gap:12px;
-    align-items:center;padding:7px 0;border-bottom:1px solid var(--line-2)}
-  .ctx-row:last-child{border-bottom:0}
-  .ctx-k{color:var(--ink-3);font-size:12px}
-  .ctx-strip{position:relative;height:16px}
-  .ctx-strip::before{content:"";position:absolute;left:0;right:0;top:7px;height:1px;
-    background:var(--line)}
-  .ctx-dot{position:absolute;top:4px;width:8px;height:8px;margin-left:-4px;
-    border-radius:50%;background:var(--ink-4)}
-  .ctx-dot.on{width:12px;height:12px;top:2px;margin-left:-6px;background:var(--c-cum);
-    box-shadow:0 0 0 2px var(--surface)}
-  .ctx-v{text-align:right;font-size:13px}
-  .ctx-r{color:var(--ink-3);font-size:11.5px;text-align:right;white-space:nowrap}
+  /* ── Tile groups ────────────────────────────
+     The day's figures, grouped by what moves them: the index itself, the
+     spot desks, margin, and futures positioning. */
+  .groups{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:12px;margin-bottom:20px}
+  .group{grid-column:span 6;min-width:0}
+  .group.g-flow{grid-column:span 12}
+  .group h2{font-size:12px;font-weight:500;color:var(--ink-3);letter-spacing:.04em;margin:0 0 7px 2px}
+  .group .kpis{margin-bottom:0;grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}
+  .kpi .v.sm{font-size:20px}
+  .kpi .lag{color:var(--tag-ink)}
+  .kpi a{color:var(--ink-2)}
+  .kpi a:hover{color:var(--ink)}
+  @media (min-width: 1100px){
+    .group.g-index{grid-column:span 5}
+    .group.g-flow{grid-column:span 7}
+    .group.g-margin{grid-column:span 7}
+    .group.g-fut{grid-column:span 5}
+  }
 
-  /* ── Table ──────────────────────────────── */
-  .table-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;gap:12px;flex-wrap:wrap}
   h2{font-size:15px;font-weight:600;margin:0}
-  .hint{color:var(--ink-3);font-size:12px}
-  .tbl-scroll{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface);
-    margin-bottom:22px}
-  table{border-collapse:collapse;width:100%;min-width:1460px;font-size:13px}
-  th,td{padding:9px 11px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--line)}
-  /* The sort affordance is a real <button> inside the th, so it is reachable by
-     keyboard and announced as a control. The th keeps the sticky positioning
-     and the sort arrow; the button carries the padding and the hit area. */
-  th{
-    color:var(--ink-3);font-weight:500;font-size:11.5px;text-align:right;
-    user-select:none;position:sticky;top:0;background:var(--surface-2);
-    letter-spacing:.02em;padding:0}
-  th button{
-    appearance:none;background:transparent;border:0;color:inherit;font:inherit;
-    letter-spacing:inherit;text-align:inherit;white-space:nowrap;
-    width:100%;padding:9px 11px;cursor:pointer}
-  th button:hover{color:var(--ink)}
-  th.sorted button::after{content:" ▾";opacity:.85}
-  th.sorted.asc button::after{content:" ▴"}
-  th:first-child,td:first-child{text-align:center}
-  th.txt,td.txt{text-align:left}
-  tbody tr{cursor:pointer}
-  tbody tr:hover{background:var(--row-hover)}
-  th button:focus-visible,tbody tr:focus-visible{
-    outline:2px solid var(--c-turnover);outline-offset:-2px}
-  tbody tr[aria-selected="true"]{background:var(--row-sel);box-shadow:inset 3px 0 0 var(--c-up)}
-  tbody tr:last-child td{border-bottom:0}
   .neg{color:var(--c-down)}   /* Taiwan convention: green = down / net sell / decrease */
   .pos{color:var(--c-up)}     /* Taiwan convention: red = up / net buy / increase */
-  .tag{display:inline-block;padding:1px 7px;border-radius:99px;font-size:11px;
-    background:var(--tag-bg);color:var(--tag-ink);border:1px solid var(--tag-line)}
-  .tag.alt{background:var(--tag2-bg);color:var(--tag2-ink);border-color:var(--tag2-line)}
-  .ratio{border-radius:5px;padding:2px 8px;display:inline-block;min-width:52px}
-  .pending{color:var(--ink-3);font-size:11.5px}
   footer{color:var(--ink-3);font-size:12px;margin-top:26px;line-height:1.7}
   footer .deployed:empty{display:none}
   code{background:var(--surface-2);padding:1.5px 5px;border-radius:4px;font-size:12px}
   .err{background:var(--err-bg);border:1px solid var(--err-line);color:var(--err-ink);padding:18px 20px;
     border-radius:10px;line-height:1.7}
 
-  /* Sort control — only needed where the sticky headers are hidden */
-  .sortbar{display:none;gap:8px;align-items:center;margin:2px 0 12px}
-  .sortbar select,.sortbar button{
-    background:var(--surface-2);color:var(--ink);border:1px solid var(--line);
-    border-radius:7px;padding:7px 10px;font-size:13px;font-family:inherit}
-  .sortbar select{flex:1;min-width:0}
-  .desktop-only{display:inline}
-
-  /* ── Phones / narrow windows ─────────────────────────────────────────────
-     The table becomes a card list. Fifteen columns of financial data cannot be
-     read by scrolling sideways on a 390px screen; each episode gets its own
-     block with the column name beside every value (via td[data-label]). */
   @media (max-width: 720px){
     .wrap{padding:14px 12px 40px}
     h1{font-size:17px}
     .sub{font-size:11.5px}
     header{gap:12px;padding-bottom:12px;margin-bottom:14px}
-    .controls{gap:10px 14px;width:100%}
-    .seg button{padding:6px 9px;font-size:12.5px}
     .btn{padding:6px 11px;font-size:12.5px}
-
-    .kpis{grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:14px}
+    .seg button{padding:6px 9px;font-size:12.5px}
+    .groups{gap:14px;margin-bottom:14px}
+    .group,.group.g-flow{grid-column:span 12}
+    .group .kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
     .kpi{padding:10px 11px}
-    .kpi .v{font-size:20px}
+    .kpi .v,.kpi .v.sm{font-size:19px}
     .kpi .k,.kpi .n{font-size:10.5px}
-
     .panel{padding:4px 2px 2px}
     .panel-head{padding:6px 8px 8px}
     .legend{gap:10px;font-size:11px;padding:6px 8px 8px}
-
-    .desktop-only{display:none}
-    .sortbar{display:flex}
-    .tbl-scroll{overflow-x:visible;border:0;background:transparent;border-radius:0}
-    table{min-width:0;display:block}
-    thead{display:none}
-    tbody{display:block}
-    /* Each episode is a compact card: #, 跌幅 and 期間 as its heading line,
-       then the other figures three to a row with the label above the value. */
-    tr{
-      display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:7px 8px;
-      background:var(--surface);border:1px solid var(--line);border-radius:10px;
-      padding:8px 12px 10px;margin-bottom:8px}
-    tr[aria-selected="true"]{box-shadow:inset 3px 0 0 var(--c-up);background:var(--row-sel)}
-    td{
-      grid-column:span 2;display:flex;flex-direction:column;align-items:flex-start;gap:1px;
-      text-align:left;padding:0;border:0;white-space:nowrap;font-size:12.5px;line-height:1.35}
-    td::before{content:attr(data-label);color:var(--ink-3);font-size:10.5px}
-    td:nth-child(-n+2),td:nth-child(5){
-      flex-direction:row;align-items:baseline;
-      border-bottom:1px solid var(--line);padding-bottom:6px;margin-bottom:1px}
-    td:nth-child(-n+2)::before,td:nth-child(5)::before{content:none}
-    td:first-child,td:nth-child(5){margin-right:-8px;padding-right:8px}   /* unbroken rule */
-    td:first-child{order:-3;grid-column:span 1;font-weight:600;font-size:14px;color:var(--ink)}
-    td:first-child::before{content:'#';color:var(--ink-3);font-weight:400}
-    td:nth-child(5){order:-2;font-weight:600;font-size:14px}
-    td:nth-child(2){order:-1;grid-column:span 3;justify-content:flex-end;font-size:12px;color:var(--ink-2)}
-    td.txt{text-align:left}
   }
 </style>
 </head>
 <body>
 <div class="wrap">
 
-  <nav class="tabs" aria-label="頁面"><a href="index.html" aria-current="page"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1.5 12.5 6 7l3 3 5.5-6.5"/></svg>大盤修正波段</a><a href="stock.html"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M5 1.5v13M11 3.5v9"/><rect x="3" y="4.5" width="4" height="6" rx=".6" fill="currentColor"/><rect x="9" y="6" width="4" height="4" rx=".6"/></svg>個股籌碼</a><a href="backtest.html"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M1.5 14.5h13"/><path d="M4 12V9M8 12V3.5M12 12V6.5"/></svg>全市場回測</a></nav>
+  <nav class="tabs" aria-label="頁面"><a href="index.html" aria-current="page"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="1.5" y="1.5" width="13" height="13" rx="2"/><path d="M1.5 6h13M6 6v8.5"/></svg>大盤今日</a><a href="drawdown.html"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1.5 12.5 6 7l3 3 5.5-6.5"/></svg>修正波段</a><a href="stock.html"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M5 1.5v13M11 3.5v9"/><rect x="3" y="4.5" width="4" height="6" rx=".6" fill="currentColor"/><rect x="9" y="6" width="4" height="4" rx=".6"/></svg>個股籌碼</a><a href="backtest.html"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M1.5 14.5h13"/><path d="M4 12V9M8 12V3.5M12 12V6.5"/></svg>全市場回測</a></nav>
 
   <header>
     <div>
-      <h1>台股大盤修正波段分析</h1>
+      <h1>台股大盤今日</h1>
       <div class="sub" id="meta">載入中…</div>
     </div>
     <div class="controls">
       <div>
-        <span class="ctrl-label">修正門檻</span>
-        <div class="seg" id="seg-threshold" role="group" aria-label="修正門檻">
-          <button data-v="0.05">5%</button>
-          <button data-v="0.07" aria-pressed="true">7%</button>
-          <button data-v="0.10">10%</button>
-          <button data-v="0.15">15%</button>
-        </div>
-      </div>
-      <div>
-        <span class="ctrl-label">價格基準</span>
-        <div class="seg" id="seg-mode" role="group" aria-label="價格基準">
-          <button data-v="intraday">盤中高低</button>
-          <button data-v="close" aria-pressed="true">收盤價</button>
-        </div>
-      </div>
-      <div>
-        <span class="ctrl-label">收復認定</span>
-        <div class="seg" id="seg-tol" role="group" aria-label="收復認定容差">
-          <button data-v="0" aria-pressed="true">嚴格</button>
-          <button data-v="0.01">1%</button>
-          <button data-v="0.02">2%</button>
-          <button data-v="0.03">3%</button>
-        </div>
-      </div>
-      <div>
-        <span class="ctrl-label">&nbsp;</span>
-        <button class="btn" id="btn-csv">匯出 CSV</button>
-      </div>
-      <div>
-        <span class="ctrl-label">&nbsp;</span>
         <button class="btn" id="btn-theme" aria-label="切換深淺色">淺色</button>
       </div>
     </div>
   </header>
 
   <div id="app" hidden>
-    <div class="kpis" id="kpis"></div>
-
-    <!-- Populated only while a correction is open; hidden otherwise. -->
-    <section class="ctx" id="ctx" hidden></section>
-
-    <div class="table-head">
-      <h2>修正波段明細</h2>
-      <span class="hint"><span class="desktop-only">點欄位標題排序 · </span>點任一列將圖表縮放至該區間前後 40 個交易日 · 再點一次取消</span>
-    </div>
-    <div class="sortbar">
-      <select id="sort-field" aria-label="排序欄位"></select>
-      <button id="sort-dir" aria-label="排序方向">▼ 由大到小</button>
-    </div>
-    <div class="tbl-scroll">
-      <!-- role="grid": the rows are selectable, and in the phone card view the
-           display:block rules would otherwise strip the implicit table roles. -->
-      <table role="grid" aria-label="修正波段明細">
-        <thead><tr id="thead" role="row"></tr></thead>
-        <tbody id="tbody"></tbody>
-      </table>
+    <div class="groups">
+      <section class="group g-index" aria-labelledby="h-index">
+        <h2 id="h-index">指數與量能</h2>
+        <div class="kpis" id="t-index"></div>
+      </section>
+      <section class="group g-flow" aria-labelledby="h-flow">
+        <h2 id="h-flow">三大法人買賣超（現貨）</h2>
+        <div class="kpis" id="t-flow"></div>
+      </section>
+      <section class="group g-margin" aria-labelledby="h-margin">
+        <h2 id="h-margin">融資</h2>
+        <div class="kpis" id="t-margin"></div>
+      </section>
+      <section class="group g-fut" aria-labelledby="h-fut">
+        <h2 id="h-fut">期貨多空</h2>
+        <div class="kpis" id="t-fut"></div>
+      </section>
     </div>
 
     <div class="panel">
       <div class="panel-head">
-        <div class="ep-nav" role="group" aria-label="切換修正波段">
-          <h2>加權指數</h2>
-          <button class="btn btn-sm" id="ep-prev" aria-label="上一波">‹</button>
-          <span class="ep-label num" id="ep-label" aria-live="polite">共 0 波</span>
-          <button class="btn btn-sm" id="ep-next" aria-label="下一波">›</button>
-          <button class="btn btn-sm" id="ep-clear" hidden>顯示全部</button>
-        </div>
+        <h2>加權指數與籌碼</h2>
         <div class="panel-tools">
           <label class="date-pick">起始日
             <input type="date" id="zoom-start" aria-label="圖表起始日"></label>
@@ -360,10 +234,8 @@
           </div>
         </div>
       </div>
-      <!-- The selected episode's table row, restated beside the chart it zooms. -->
-      <div class="ep-sum num" id="ep-sum" hidden></div>
-      <!-- The 法人 control floats over the flow panels it switches, positioned
-           by renderChart() on that panel's title row. -->
+      <!-- The 法人 and ETF controls float over the panels they switch,
+           positioned by the chart on those panels' title rows. -->
       <div class="chart-wrap">
         <div id="chart"></div>
         <div class="seg seg-sm chart-float" id="seg-desk" role="group" aria-label="法人買賣超對象">
@@ -380,44 +252,24 @@
       <div class="legend">
         <span><i class="dot" id="lg-index" style="background:var(--c-index)"></i>加權指數</span>
         <span><i class="dot" style="background:var(--c-turnover)"></i>成交金額</span>
-        <span><i class="dot" style="background:var(--c-up)"></i>買超</span>
-        <span><i class="dot" style="background:var(--c-down)"></i>賣超</span>
+        <span><i class="dot" style="background:var(--c-up)"></i>買超 / 淨多單</span>
+        <span><i class="dot" style="background:var(--c-down)"></i>賣超 / 淨空單</span>
         <span><i class="dot" style="background:var(--c-cum)"></i>累計買賣超</span>
         <span><i class="dot" style="background:var(--c-margin)"></i>融資餘額 / 維持率</span>
-        <span><i class="dot" style="background:var(--c-band-on)"></i>修正區間</span>
-      </div>
-    </div>
-
-
-    <div class="panel">
-      <div class="panel-head">
-        <h2>波段疊圖</h2>
-        <div class="seg" id="seg-ov" role="group" aria-label="疊圖對齊方式">
-          <button data-v="peak" aria-pressed="true">對齊高點</button>
-          <button data-v="trough">對齊谷底</button>
-        </div>
-      </div>
-      <div id="overlay"></div>
-      <div class="legend">
-        <span><i class="dot" style="background:var(--ink-4)"></i>已收復波段</span>
-        <span><i class="dot" style="background:var(--c-cum)"></i>進行中</span>
-        <span><i class="dot" style="background:var(--c-turnover)"></i>表格選取中</span>
-        <span class="ctx-sub">游標移到線上可看是哪一波，點擊可將上方圖表縮放至該波</span>
       </div>
     </div>
 
     <footer>
-      <p><strong>融資殺盤幅度</strong> = 區間融資餘額減幅(%) ÷ 指數跌幅(%)。比值愈高代表散戶去槓桿愈徹底，
-      一般認為 <strong>&gt; 1.5</strong> 時融資籌碼已清洗得較乾淨；色階愈深代表比值愈高，數值本身一律顯示，
-      不以顏色單獨傳達資訊。</p>
       <p><strong>大盤融資維持率</strong> = Σ（上市個股融資餘額張數 × 1000 × 當日收盤價）÷ 上市融資金額。
       個股維持率低於 130% 會被追繳，大盤跌近此線時常伴隨斷頭賣壓；圖上虛線即為 130%。
-      本序列自 2022 年起（逐日全市場資料的起點），停牌個股以最近收盤價計。
-      <strong>排除 ETF</strong>：交易所只公布融資金額總數，ETF 部分由每日融資張數變化推估（增加的張數以當日收盤價 × 6 成計入，
-      減少的按比例償還），再自總額扣除；切換後融資三個圖表、波段融資指標與 KPI 一起改變，2022 年前無此資料。</p>
-      <p>本欄僅描述已發生的籌碼變化，不構成任何投資建議，本專案亦不產生買賣訊號或目標價。</p>
-      <p>資料來源：臺灣證券交易所（加權指數日 K、市場成交資訊、三大法人買賣金額、信用交易統計）。
-      金額單位皆為新台幣億元。缺漏交易日在圖上以斷點呈現，不以 0 補值。</p>
+      <strong>排除 ETF</strong>：ETF 部分由每日融資張數變化推估後自總額扣除，2022 年前無此資料。</p>
+      <p><strong>外資台指期淨未平倉</strong> = 外資及陸資在臺股期貨（大台）的多方未平倉口數減空方未平倉口數；
+      正值為淨多單、負值為淨空單。期交所僅提供近 3 年資料，更早的交易日在圖上為空白。</p>
+      <p>各卡片顯示該項目最新一筆資料；若晚於最新交易日公布（例如維持率），卡片會標出資料日期。
+      歷次修正波段的比較請見 <a href="drawdown.html">修正波段</a>。</p>
+      <p>本頁僅描述已發生的籌碼變化，不構成任何投資建議，本專案亦不產生買賣訊號或目標價。</p>
+      <p>資料來源：臺灣證券交易所（加權指數日 K、市場成交資訊、三大法人買賣金額、信用交易統計）、
+      臺灣期貨交易所（三大法人區分各期貨契約）。金額單位皆為新台幣億元。缺漏交易日在圖上以斷點呈現，不以 0 補值。</p>
       <p class="deployed"><!--DEPLOYED--></p>
     </footer>
   </div>
@@ -426,1069 +278,134 @@
 </div>
 
 <script src="data/taiex-daily.js"></script>
-<script src="js/detect.js"></script>
+<script src="js/common.js"></script>
+<script src="js/market-chart.js"></script>
 <script>
 (function(){
   "use strict";
+  const { has, nf, sgn, yi, sgnYi, fd } = window.TWF;
+  const MARGIN_CALL = window.MarketChart.MARGIN_CALL;
 
-  const CSS = getComputedStyle(document.documentElement);
-  const C = k => CSS.getPropertyValue(k).trim();
-  // Filled by readColors(), and refilled when the theme changes: every
-  // renderer reads COLORS at draw time, so a redraw picks up the new palette.
-  const COLORS = {}, BAND = {};
-  function readColors(){ Object.assign(COLORS, {
-    index:C('--c-index'), turnover:C('--c-turnover'), cum:C('--c-cum'),
-    margin:C('--c-margin'), up:C('--c-up'), down:C('--c-down'),
-    ink:C('--ink'), ink2:C('--ink-2'), ink3:C('--ink-3'),
-    line:C('--line'), line2:C('--line-2'), surface:C('--surface'),
-    ink4:C('--ink-4'), pointer:C('--axis-pointer'), bandOn:C('--c-band-on'),
-    bandLabel:C('--band-label'), bandLabelOff:C('--band-label-off'),
-    zoomTrack:C('--zoom-track'), zoomTrackOn:C('--zoom-track-on'), zoomFill:C('--zoom-fill')
-  });
-  // The correction mask, at its three weights.
-  Object.assign(BAND, {main:alpha(COLORS.up,.13), sub:alpha(COLORS.up,.09), on:COLORS.bandOn});
-  }
-  // rgba() from one of the hex vars above, so a tint stays tied to its source
-  // colour instead of being restated as a literal that silently goes stale.
-  const alpha = (hex, a) => {
-    const h = hex.replace('#','');
-    const n = parseInt(h.length===3 ? h.split('').map(c=>c+c).join('') : h, 16);
-    return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`;
-  };
-  readColors();
-
-  // ── Data loading ──────────────────────────────────────────
   const rows = window.TAIEX_DATA;
   const META = window.TAIEX_META || {};
-  if(!Array.isArray(rows) || !rows.length){
-    const e = document.getElementById('error');
-    e.hidden = false;
-    e.innerHTML = '<strong>找不到資料。</strong><br>' +
-      '請先執行 <code>python3 pipeline/fetch_data.py</code> 產生 <code>data/taiex-daily.js</code>，' +
-      '再重新整理本頁。<br>本頁不使用任何模擬資料。';
-    return;
+  if(!Array.isArray(rows) || !rows.length){ window.TWF.showNoData(); return; }
+  const N = rows.length;
+
+  // The newest session with a value for `key` (or for f(row)). Chip data is
+  // published hours after the close and on its own schedule, so each tile
+  // reads its own latest figure and says so when it lags the index.
+  function lastOf(f){
+    if(typeof f === 'string'){ const k = f; f = r => r[k]; }
+    for(let i=N-1;i>=0;i--) if(has(f(rows[i]))) return {i, r:rows[i], v:f(rows[i])};
+    return null;
   }
-
-  const dates  = rows.map(r=>r.date);
-  const N      = rows.length;
-  const gap    = v => (v===null||v===undefined) ? '-' : v;   // '-' renders as a gap in ECharts
-  const closes = rows.map(r=>gap(r.close));
-  const turn   = rows.map(r=>gap(r.turnoverYi));
-  let desk = 'foreign';          // which desk the two flow panels show
-
-  // TWSE publishes three institutional desks. Only one is plotted at a time:
-  // three overlapping bar series across 1,800 sessions is unreadable, and the
-  // palette is validated for the hues already in use — a fourth and fifth
-  // categorical colour would need re-validating for CVD separation. The
-  // selector keeps it to one series, so no new hue is introduced at all.
-  // 合計 sums whichever desks reported that day, and is missing only when all
-  // three are — the same "no fake zeros" rule the single-desk series follow.
-  const net = k => r => r[k];
-  const DESKS = {
-    foreign:{val:net('foreignNetYi'), label:'外資'},
-    trust:  {val:net('trustNetYi'),   label:'投信'},
-    dealer: {val:net('dealerNetYi'),  label:'自營商'},
-    total:  {val:r=>{
-      const vs = ['foreignNetYi','trustNetYi','dealerNetYi']
-        .map(k=>r[k]).filter(v=>v!==null&&v!==undefined);
-      return vs.length ? +vs.reduce((a,b)=>a+b,0).toFixed(2) : null;
-    }, label:'三大法人'}
+  const latest = lastOf('close');
+  const latestDate = latest ? latest.r.date : rows[N-1].date;
+  const cls = v => !has(v) ? '' : v>0 ? 'pos' : v<0 ? 'neg' : '';
+  const lag = hit => hit && hit.r.date !== latestDate
+    ? ` <span class="lag">· 資料日 ${fd(hit.r.date).slice(5)}</span>` : '';
+  // Sum of f over the `n` sessions ending at index i, skipping gaps.
+  const sumBack = (f, i, n) => {
+    let s = 0, any = false;
+    for(let j=Math.max(0, i-n+1); j<=i; j++){ const v = f(rows[j]); if(has(v)){ s += v; any = true; } }
+    return any ? s : null;
   };
-  const deskFlow = () => rows.map(r=>gap(DESKS[desk].val(r)));
-  let fgn = deskFlow();
-  // The margin view: as published, or with the ETF slice taken out. TWSE
-  // gives the loan only as a market total, so the ETF part is the pipeline's
-  // estimate and exists only from 2022; earlier days have no ex-ETF figure.
-  // Everything margin-related (panels, tooltip, KPI, episode metrics) reads
-  // `mrows`, so one switch moves all of it together.
-  let etf = 'incl';
-  const rowsExEtf = rows.map(r=>({...r,
-    marginBalanceYi: r.marginBalanceExEtfYi ?? null, marginRatio: r.marginRatioExEtf ?? null}));
-  let mrows = rows;
-  let mgn, mRatio, mgnChg;
-  function buildMargin(){
-    mrows = etf === 'excl' ? rowsExEtf : rows;
-    mgn    = mrows.map(r=>gap(r.marginBalanceYi));
-    mRatio = mrows.map(r=>gap(r.marginRatio));
-    // Day-on-day margin change. A missing day on either side leaves a gap rather
-    // than diffing across it.
-    mgnChg = mrows.map((r,i)=>{
-      const m0 = i>0 ? mrows[i-1].marginBalanceYi : null, m1 = r.marginBalanceYi;
-      return (m0===null||m0===undefined||m1===null||m1===undefined) ? null : +(m1-m0).toFixed(2);
-    });
-  }
-  buildMargin();
+  // The previous session's value, or null when it is missing (never diff across a gap).
+  const prev = (hit, f) => {
+    if(!hit || hit.i === 0) return null;
+    const v = f(rows[hit.i-1]);
+    return has(v) ? v : null;
+  };
+  const tile = (k, v, n, c='', small=false) =>
+    `<div class="kpi"><div class="k">${k}</div>` +
+    `<div class="v num ${small?'sm ':''}${c}">${v}</div><div class="n num">${n||''}</div></div>`;
 
-  // Cumulative foreign net, rebased to the start of whatever window is in view.
-  // Anchoring it to 2021-01 would make the line inside a zoomed episode read as a
-  // slice of a five-year total — the level would be dominated by history and the
-  // shape of the episode itself would be squeezed flat. Restarting at zero on the
-  // left edge answers the question actually being asked: how much did foreigners
-  // buy or sell *during this stretch*.
-  // A missing day counts as no change, so the line stays continuous.
-  let cumBase = 0;
-  function buildCum(from){
-    const val = DESKS[desk].val;
-    let s = 0;
-    return rows.map((r, i) => {
-      if(i < from) return '-';                 // outside the window: draw nothing
-      s += (val(r) || 0);
-      return +s.toFixed(2);
-    });
-  }
-  let cumView = buildCum(0);
-  const deskName = () => DESKS[desk].label;
-  const cumTitle = () => cumBase > 0
-    ? `${deskName()}累計買賣超（億元，自 ${fd(dates[cumBase])} 起算）`
-    : `${deskName()}累計買賣超（億元，自期初起算）`;
+  const desks = [
+    ['外資', r=>r.foreignNetYi], ['投信', r=>r.trustNetYi], ['自營商', r=>r.dealerNetYi],
+    ['三大法人合計', r=>{
+      const vs = [r.foreignNetYi, r.trustNetYi, r.dealerNetYi].filter(has);
+      return vs.length ? +vs.reduce((a,b)=>a+b,0).toFixed(2) : null;
+    }]
+  ];
 
-  // ── Formatting ────────────────────────────────────────────
-  const nf = (v,d=0)=> (v===null||v===undefined||Number.isNaN(v)) ? '—'
-        : v.toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
-  const sgn = (v,d=0)=> (v===null||v===undefined) ? '—' : (v>0?'+':'') + nf(v,d);
-  // Amount in 億, or a bare em-dash. Appending the unit unconditionally would
-  // render a missing value as "— 億", which reads as a quantity rather than a gap.
-  const yi  = (v,d=0)=> (v===null||v===undefined) ? '—' : nf(v,d)+' 億';
-  const sgnYi = (v,d=0)=> (v===null||v===undefined) ? '—' : sgn(v,d)+' 億';
-  // An episode's lowest maintenance ratio, red once it is under the call line
-  const ratioLow = e => e.marginRatioLow===null||e.marginRatioLow===undefined ? '—'
-    : `<span class="${e.marginRatioLow<MARGIN_CALL?'neg':''}">${nf(e.marginRatioLow,1)}%</span>`;
-  const fd  = d => d ? d.slice(0,4)+'/'+d.slice(5,7)+'/'+d.slice(8,10) : '—';
-  // Correction detection lives in detect.js so the browser and verify.js run
-  // the exact same code path.
-  const detect = (threshold, mode) =>
-    window.TaiexDetect.detectEpisodes(mrows, threshold, mode, {tol: recoverTol});
+  function renderTiles(){
+    // ── 指數與量能
+    const c = latest, pc = prev(c, r=>r.close);
+    const chg = c && pc!==null ? c.v - pc : null;
+    const chgPct = chg!==null ? chg / pc * 100 : null;
+    const t = lastOf('turnoverYi');
+    const avg5 = t && t.i >= 5 ? sumBack(r=>r.turnoverYi, t.i-1, 5) / 5 : null;
+    let peak = -Infinity, peakAt = null;
+    for(const r of rows) if(has(r.close) && r.close > peak){ peak = r.close; peakAt = r.date; }
+    const dd = c && peak > 0 ? (c.v - peak) / peak * 100 : null;
+    document.getElementById('t-index').innerHTML = [
+      tile('加權指數', c ? nf(c.v,2) : '—',
+        chg===null ? '' : `<span class="${cls(chg)}">${sgn(chg,2)}（${sgn(chgPct,2)}%）</span>`),
+      tile('成交金額', t ? yi(t.v,0) : '—',
+        (avg5 ? `前 5 日均 ${nf(avg5,0)} 億 · <span class="${cls(t.v-avg5)}">${sgn((t.v/avg5-1)*100,1)}%</span>` : '') + lag(t)),
+      tile('距收盤歷史高點', dd===null ? '—' : (dd===0 ? '創新高' : sgn(dd,2)+'%'),
+        peakAt ? `${fd(peakAt)} · <a href="drawdown.html">修正波段 →</a>` : '', dd<0 ? 'neg' : dd===0 ? 'pos' : '')
+    ].join('');
 
-  // ── State ─────────────────────────────────────────────────
-  let threshold = 0.07, mode = 'close', chartType = 'candle';
-  // Recovery tolerance: coming within this much of the prior peak counts as
-  // reclaiming it. Lets two crashes that share a peak separate.
-  let recoverTol = 0;
-  let episodes = [], selected = -1;
-  let sortKey = null, sortAsc = false;
+    // ── 三大法人
+    document.getElementById('t-flow').innerHTML = desks.map(([label, f])=>{
+      const h = lastOf(f);
+      const s5 = h ? sumBack(f, h.i, 5) : null;
+      return tile(label, h ? sgnYi(h.v,1) : '—',
+        (s5===null ? '' : `近 5 日 <span class="${cls(s5)}">${sgnYi(s5,0)}</span>`) + lag(h),
+        h ? cls(h.v) : '', true);
+    }).join('');
 
-  // Current x-range, as data indices. renderChart() re-applies this on every
-  // setOption — without it, notMerge:true would silently reset the view to the
-  // full range every time the chart is rebuilt.
-  let zoomRange = null;   // null = show everything
-  // The view the page opens on: the latest calendar year of sessions. Selecting
-  // an episode zooms to it; deselecting it (顯示全部) shows the full range.
-  function latestYear(){
-    const from = new Date(dates[N-1]);
-    from.setUTCFullYear(from.getUTCFullYear() - 1);
-    const s = dates.findIndex(d => d > from.toISOString().slice(0,10));
-    return s > 0 ? {s, e:N-1} : null;
-  }
+    // ── 融資
+    const m = lastOf('marginBalanceYi'), pm = prev(m, r=>r.marginBalanceYi);
+    const mChg = m && pm!==null ? m.v - pm : null;
+    const mx = lastOf('marginBalanceExEtfYi'), pmx = prev(mx, r=>r.marginBalanceExEtfYi);
+    const mxChg = mx && pmx!==null ? mx.v - pmx : null;
+    const ra = lastOf('marginRatio'), rx = lastOf('marginRatioExEtf');
+    document.getElementById('t-margin').innerHTML = [
+      tile('融資餘額', m ? yi(m.v,0) : '—',
+        (mChg===null ? '' : `較前日 <span class="${cls(mChg)}">${sgnYi(mChg,1)}</span>`) + lag(m), '', true),
+      tile('融資餘額（排除 ETF）', mx ? yi(mx.v,0) : '—',
+        (mxChg===null ? '' : `較前日 <span class="${cls(mxChg)}">${sgnYi(mxChg,1)}</span>`) + lag(mx), '', true),
+      tile('融資維持率', ra ? nf(ra.v,1)+'%' : '—',
+        (rx ? `排除 ETF ${nf(rx.v,1)}% · ` : '') + `追繳線 ${MARGIN_CALL}%` + lag(ra),
+        ra && ra.v < MARGIN_CALL ? 'neg' : '', true)
+    ].join('');
 
-  // ECharts candlestick wants [open, close, low, high] — note that order.
-  const ohlc = rows.map(r =>
-    (r.open===null||r.close===null||r.low===null||r.high===null)
-      ? '-' : [r.open, r.close, r.low, r.high]);
-
-  // ── Charts ────────────────────────────────────────────────
-  // Reveal the app BEFORE init. ECharts measures its container once, at init,
-  // and a hidden element measures 0x0 — it would silently fall back to a 100px
-  // default and cram all 1,349 sessions into the left edge. setOption never
-  // re-measures; only resize() does.
-  document.getElementById('app').hidden = false;
-
-  const chart = echarts.init(document.getElementById('chart'), null, {renderer:'canvas'});
-
-  // Stacked panels on one shared x-axis. Daily foreign net and cumulative
-  // foreign net live in separate panels rather than sharing one plot with two
-  // y-scales — a dual-axis chart makes the crossings look meaningful when they
-  // are an artifact of the scaling.
-  // On desktop the whole stack is sized to the window, so an episode's price,
-  // turnover, flows and margin can be read in one screen without scrolling
-  // between them. Phones get the same panels, just tighter: a 70px y-axis gutter
-  // eats a fifth of a 390px screen, and the full stack needs the page to scroll
-  // rather than each panel being squashed.
-  const NAMES = ['加權指數','成交金額（億元）','買賣超（億元）',
-                 '累計買賣超（億元）','融資增減（億元）','融資餘額（億元）','融資維持率（%）'];
-  const CUM = 3;                 // computed title: desk name + rebase date
-  const FLOW = 2;                // computed title: desk name
-  const MGN_CHG = 4, MGN = 5, MGN_RATIO = 6;
-  // Individual positions get a margin call below this; the market-wide ratio
-  // nearing it is when forced selling shows up.
-  const MARGIN_CALL = 130;
-  const isNarrow = () => window.innerWidth <= 720;
-  const MARGIN_PANELS = [MGN_CHG, MGN, MGN_RATIO];
-  const etfTag = () => etf === 'excl' ? '（排除 ETF）' : '';
-  const panelTitle = (i, name) => i===CUM ? cumTitle() : i===FLOW ? deskName()+name
-    : MARGIN_PANELS.includes(i) && etf === 'excl' ? name + ' · 排除 ETF' : name;
-
-  function layout(){
-    const narrow = isNarrow();
-    const gap    = narrow ? 40  : 30;      // room for each panel's title
-    const top0   = narrow ? 28  : 26;
-    const foot   = narrow ? 34  : 44;      // room for the zoom slider
-    let mainH = 190, subH = 70;
-    if(!narrow){
-      // Panel head, summary bar and legend take ~150px of the window. Solve
-      // top0 + main + 5*(sub+gap) + foot = avail with main = 2.8*sub, clamped
-      // so a short window still gets readable panels and a tall one stops
-      // growing at the old fixed size.
-      const avail = window.innerHeight - 150;
-      const subs = NAMES.length - 1;
-      subH  = Math.max(58, Math.min(88,
-                Math.floor((avail - top0 - foot - subs*gap) / (subs + 2.8))));
-      mainH = Math.min(250, Math.round(subH * 2.8));
-    }
-    const grids = [];
-    let top = top0;
-    for(let i=0;i<NAMES.length;i++){
-      const h = i===0 ? mainH : subH;
-      grids.push({name:NAMES[i], top, height:h});
-      top += h + gap;
-    }
-    return {
-      grids, narrow,
-      left:  narrow ? 46 : 70,
-      right: narrow ? 12 : 26,
-      totalH: top + foot
-    };
-  }
-  let L = layout();
-  const LAST = NAMES.length - 1;
-
-  const axisCommon = i => ({
-    type:'category', data:dates, gridIndex:i, boundaryGap:false,
-    axisLine:{lineStyle:{color:COLORS.line}},
-    axisTick:{show:false},
-    splitLine:{show:false},
-    axisPointer:{show:true, label:{show:i===LAST, backgroundColor:COLORS.line, color:COLORS.ink}},
-    axisLabel: i===LAST
-      ? {color:COLORS.ink3, fontSize:L.narrow?9:11, hideOverlap:true,
-         // On a phone there is no room for YYYY/MM on every tick
-         formatter:v=> L.narrow ? v.slice(2,4)+'/'+v.slice(5,7)
-                                : v.slice(0,4)+'/'+v.slice(5,7)}
-      : {show:false}
-  });
-  const valCommon = i => ({
-    type:'value', gridIndex:i, scale:i===0,
-    ...(i===MGN_RATIO ? {min:v=>Math.min(MARGIN_CALL-10, Math.floor(v.min/10)*10),
-                         max:v=>Math.ceil(v.max/10)*10} : {}),
-    // The sub-panels are 60-90px tall: three ticks, not a stack of seven
-    splitNumber: i===0 ? 5 : 3,
-    axisLine:{show:false}, axisTick:{show:false},
-    splitLine:{lineStyle:{color:COLORS.line2}},
-    axisLabel:{color:COLORS.ink3, fontSize:L.narrow?9:11,
-      // 46px of gutter cannot hold "45,000"; abbreviate hard on narrow screens
-      formatter:v=>{
-        const a = Math.abs(v);
-        // Enough decimals that neighbouring ticks never print the same label
-        // (16,000 and 16,500 both rounding to "1.6萬")
-        if(a>=10000) return (v/10000).toFixed(
-          v%10000===0 ? 0 : v%1000===0 ? 1 : 2)+'萬';
-        if(L.narrow && a>=1000) return (v/1000).toFixed(0)+'k';
-        return nf(v,0);
-      }}
-  });
-
-  function markAreaFor(eps, main){
-    return {
-      silent:true,
-      itemStyle:{color: main ? BAND.main : BAND.sub},
-      emphasis:{disabled:true},
-      data: eps.map((e,i)=>{
-        const on = i===selected;
-        return [
-          {xAxis:e.peakDate,
-           itemStyle:{color: on ? BAND.on : (main ? BAND.main : BAND.sub)},
-           label: main ? {show:true, formatter:'#'+(i+1), position:'insideTop',
-                          color: on ? COLORS.bandLabel : COLORS.bandLabelOff, fontSize:10} : {show:false}},
-          {xAxis:e.troughDate}
-        ];
-      })
-    };
-  }
-
-  function tooltipFormatter(params){
-    if(!params || !params.length) return '';
-    const i = params[0].dataIndex, r = rows[i];
-    if(!r) return '';
-    const li = (label,val,color)=>
-      `<div style="display:flex;justify-content:space-between;gap:18px;line-height:1.65">
-         <span style="color:${COLORS.ink3}">${color?`<i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${color};margin-right:6px"></i>`:''}${label}</span>
-         <span style="font-variant-numeric:tabular-nums;color:${COLORS.ink}">${val}</span>
-       </div>`;
-    const chg = i>0 && r.close!==null && rows[i-1].close!==null ? r.close-rows[i-1].close : null;
-    const chgPct = (chg!==null && rows[i-1].close) ? chg/rows[i-1].close*100 : null;
-    const chgColor = chg===null ? COLORS.ink2 : (chg>=0?COLORS.up:COLORS.down);
-    const mChg = mgnChg[i];
-    const mChgColor = mChg===null ? null : (mChg>=0?COLORS.up:COLORS.down);
-
-    // Which correction window this day falls in
-    let band='';
-    const k = episodes.findIndex(e=> i>=e.peakIdx && i<=(e.recoverIdx===null? N-1 : e.recoverIdx));
-    if(k>=0){
-      const e=episodes[k];
-      const phase = i<=e.troughIdx ? '下跌中' : '收復中';
-      band = `<div style="margin-top:7px;padding-top:6px;border-top:1px solid ${COLORS.line};color:${COLORS.cum};font-size:11.5px">
-                修正 #${k+1} · ${phase} · 波段跌幅 ${e.drawdownPct.toFixed(2)}%</div>`;
-    }
-    return `<div style="min-width:230px;font-size:12.5px">
-      <div style="color:${COLORS.ink};font-weight:600;margin-bottom:6px">${fd(r.date)}</div>
-      ${li('收盤', nf(r.close,2), COLORS.index)}
-      ${li('漲跌', chg===null?'—':`<span style="color:${chgColor}">${sgn(chg,2)} (${sgn(chgPct,2)}%)</span>`)}
-      ${li('高 / 低', `${nf(r.high,2)} / ${nf(r.low,2)}`)}
-      ${li('成交金額', yi(r.turnoverYi), COLORS.turnover)}
-      ${Object.values(DESKS).map(dk=>{
-          const v = dk.val(r);
-          const c = v===null||v===undefined ? null : (v>=0?COLORS.up:COLORS.down);
-          return li(dk.label + (DESKS[desk]===dk ? ' ●' : ''),
-            v===null||v===undefined ? '—' : `<span style="color:${c}">${sgnYi(v,1)}</span>`, c);
-        }).join('')}
-      ${li(deskName()+'累計', cumView[i]==='-' ? '—' : sgnYi(cumView[i],0), COLORS.cum)}
-      ${li('融資餘額'+etfTag(), yi(mrows[i].marginBalanceYi), COLORS.margin)}
-      ${li('融資增減', mChg===null ? '—' : `<span style="color:${mChgColor}">${sgnYi(mChg,1)}</span>`, mChgColor)}
-      ${li('融資維持率'+etfTag(), mrows[i].marginRatio===null||mrows[i].marginRatio===undefined ? '—' : nf(mrows[i].marginRatio,2)+'%', COLORS.margin)}
-      ${band}</div>`;
-  }
-
-  // Both dataZoom components must carry the same range, or the slider and the
-  // inside-zoom disagree after a rebuild.
-  const zoomOpt = () => zoomRange
-    ? {startValue: zoomRange.s, endValue: zoomRange.e}
-    : {start: 0, end: 100};
-
-  function mainSeries(){
-    const common = {
-      name:'加權指數', xAxisIndex:0, yAxisIndex:0,
-      markArea: markAreaFor(episodes, true)
-    };
-    if(chartType === 'candle'){
-      return { ...common, type:'candlestick', data:ohlc,
-        itemStyle:{                       // 台股慣例：紅漲綠跌
-          color:COLORS.up,       borderColor:COLORS.up,      // 收 >= 開
-          color0:COLORS.down,    borderColor0:COLORS.down    // 收 <  開
-        },
-        // At full zoom the candles are sub-pixel; barMaxWidth keeps them from
-        // fusing into a solid block once zoomed in.
-        barMaxWidth:9
-      };
-    }
-    return { ...common, type:'line', data:closes,
-      showSymbol:false, symbol:'circle', symbolSize:8, connectNulls:false,
-      lineStyle:{width:2, color:COLORS.index},
-      areaStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[
-        {offset:0,color:alpha(COLORS.index,.14)},{offset:1,color:alpha(COLORS.index,0)}])} };
-  }
-
-  function renderChart(){
-    // Recompute on every render so a rotation or window resize is picked up.
-    L = layout();
-    fgn = deskFlow();                        // follows the 法人 control
-    const el = document.getElementById('chart');
-    if(parseInt(el.style.height, 10) !== L.totalH){
-      el.style.height = L.totalH + 'px';
-      chart.resize();
-    }
-    const opt = {
-      backgroundColor:'transparent',
-      animation:false,
-      textStyle:{fontFamily:'Inter, "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif'},
-      title: L.grids.map((g,i)=>({
-        text: panelTitle(i, g.name), left:L.narrow?8:L.left+4, top:g.top-(L.narrow?19:17),
-        textStyle:{color:COLORS.ink3, fontSize:L.narrow?10:11.5, fontWeight:500}
-      })),
-      grid: L.grids.map(g=>({left:L.left, right:L.right, top:g.top, height:g.height})),
-      xAxis: NAMES.map((_,i)=>axisCommon(i)),
-      yAxis: NAMES.map((_,i)=>valCommon(i)),
-      axisPointer:{
-        link:[{xAxisIndex:'all'}],
-        lineStyle:{color:COLORS.pointer, width:1, type:'dashed'},
-        label:{backgroundColor:COLORS.line}
-      },
-      tooltip:{
-        trigger:'axis', axisPointer:{type:'cross'},
-        backgroundColor:alpha(COLORS.surface,.97), borderColor:COLORS.line, borderWidth:1,
-        padding:L.narrow?[8,9]:[10,12], confine:true,
-        extraCssText:'backdrop-filter:blur(4px);border-radius:8px;max-width:88vw',
-        textStyle:{color:COLORS.ink, fontSize:L.narrow?11:12.5},
-        formatter: tooltipFormatter
-      },
-      dataZoom:[
-        // On touch, ECharts' inside-zoom captures one-finger drags, which would
-        // hijack vertical page scrolling. Leave pinch-zoom on, panning off, and
-        // let the (enlarged) slider be the deliberate way to move the window.
-        {type:'inside', xAxisIndex:NAMES.map((_,i)=>i), ...zoomOpt(), zoomOnMouseWheel:true,
-         moveOnMouseMove: !L.narrow, preventDefaultMouseMove: !L.narrow},
-        {type:'slider', xAxisIndex:NAMES.map((_,i)=>i), height:L.narrow?26:20, bottom:10, ...zoomOpt(),
-         backgroundColor:COLORS.surface, borderColor:COLORS.line, fillerColor:alpha(COLORS.turnover,.14),
-         handleStyle:{color:COLORS.ink4}, moveHandleStyle:{color:COLORS.ink4},
-         dataBackground:{lineStyle:{color:COLORS.zoomTrack}, areaStyle:{color:COLORS.line2}},
-         selectedDataBackground:{lineStyle:{color:COLORS.zoomTrackOn}, areaStyle:{color:COLORS.zoomFill}},
-         textStyle:{color:COLORS.ink3, fontSize:10},
-         // Full date, so dragging a handle can land on an exact start day
-         labelFormatter: v => dates[Math.round(v)] ? fd(dates[Math.round(v)]) : ''}
-      ],
-      series:[
-        mainSeries(),
-
-        { name:'成交金額', type:'bar', data:turn, xAxisIndex:1, yAxisIndex:1,
-          itemStyle:{color:COLORS.turnover, borderRadius:[2,2,0,0]}, barMaxWidth:6 },
-
-        { name:deskName()+'買賣超', type:'bar', data:fgn, xAxisIndex:FLOW, yAxisIndex:FLOW,
-          itemStyle:{ borderRadius:[2,2,0,0],
-            color:p => (p.value>=0 ? COLORS.up : COLORS.down) }, barMaxWidth:6,
-          markLine:{silent:true, symbol:'none', data:[{yAxis:0}],
-            lineStyle:{color:COLORS.ink4, width:1}, label:{show:false}} },
-
-        { name:deskName()+'累計買賣超', type:'line', data:cumView, xAxisIndex:CUM, yAxisIndex:CUM,
-          showSymbol:false, symbolSize:8, lineStyle:{width:2, color:COLORS.cum},
-          areaStyle:{color:alpha(COLORS.cum,.10)},
-          markLine:{silent:true, symbol:'none', data:[{yAxis:0}],
-            lineStyle:{color:COLORS.ink4, width:1}, label:{show:false}},
-          markArea: markAreaFor(episodes, false) },
-
-        // Same red-up / green-down bars as the desk flows, so a margin build-up
-        // and a foreign sell-off read in one visual language.
-        { name:'融資增減', type:'bar', data:mgnChg.map(gap), xAxisIndex:MGN_CHG, yAxisIndex:MGN_CHG,
-          itemStyle:{ borderRadius:[2,2,0,0],
-            color:p => (p.value>=0 ? COLORS.up : COLORS.down) }, barMaxWidth:6,
-          markLine:{silent:true, symbol:'none', data:[{yAxis:0}],
-            lineStyle:{color:COLORS.ink4, width:1}, label:{show:false}} },
-
-        { name:'融資餘額', type:'line', data:mgn, xAxisIndex:MGN, yAxisIndex:MGN,
-          showSymbol:false, symbolSize:8, connectNulls:false,
-          lineStyle:{width:2, color:COLORS.margin},
-          areaStyle:{color:alpha(COLORS.margin,.10)},
-          markArea: markAreaFor(episodes, false) },
-
-        // Not scale:true like the index — the 130% call line must stay in view
-        // so the distance to it reads at a glance.
-        { name:'融資維持率', type:'line', data:mRatio, xAxisIndex:MGN_RATIO, yAxisIndex:MGN_RATIO,
-          showSymbol:false, symbolSize:8, connectNulls:false,
-          lineStyle:{width:2, color:COLORS.margin},
-          markLine:{silent:true, symbol:'none', data:[{yAxis:MARGIN_CALL}],
-            lineStyle:{color:COLORS.down, width:1, type:'dashed'}, label:{show:false}},
-          markArea: markAreaFor(episodes, false) },
-
-        // ECharts mis-places a markArea hosted on a bar series once dataZoom
-        // filters the data: the bands drift by days to weeks against the
-        // index panel. Hang the bar panels' bands on empty line series instead,
-        // which resolve dates through the axis the same way the index does.
-        ...[1, FLOW, MGN_CHG].map(i=>({ type:'line', data:[], silent:true,
-          xAxisIndex:i, yAxisIndex:i, markArea: markAreaFor(episodes, false) }))
-      ]
-    };
-    chart.setOption(opt, {notMerge:true});
-
-    // Pin the 法人 control to the right end of the daily-flow panel's title row.
-    const deskSeg = document.getElementById('seg-desk');
-    deskSeg.style.top   = (L.grids[FLOW].top - 30) + 'px';
-    deskSeg.style.right = L.right + 'px';
-    // ...and the ETF switch on the first margin panel's, covering all three.
-    const etfSeg = document.getElementById('seg-etf');
-    etfSeg.style.top   = (L.grids[MGN_CHG].top - 30) + 'px';
-    etfSeg.style.right = L.right + 'px';
-    syncStartInput();
-    renderEpisodeNav();
-
-    // Keep the legend swatch honest: in candlestick mode the index is drawn in
-    // the red/green up-down pair, not the neutral line colour.
-    document.getElementById('lg-index').style.background = chartType === 'candle'
-      ? `linear-gradient(135deg, ${COLORS.up} 50%, ${COLORS.down} 50%)`
-      : COLORS.index;
-  }
-
-  // ── Episode stepper + summary ─────────────────────────────
-  // The table sits above the chart, so comparing episodes used to mean scrolling
-  // back up for every click. The stepper walks the episodes in time order from
-  // the chart itself, and the summary bar restates the table row's numbers next
-  // to the panels they describe.
-  function renderEpisodeNav(){
-    const e = episodes[selected];
-    document.getElementById('ep-label').textContent = e
-      ? `#${selected+1} / ${episodes.length} · ${fd(e.peakDate)}`
-      : `共 ${episodes.length} 波`;
-    document.getElementById('ep-prev').disabled = !episodes.length || selected === 0;
-    document.getElementById('ep-next').disabled = !episodes.length || selected === episodes.length-1;
-    document.getElementById('ep-clear').hidden = !e;
-
-    const box = document.getElementById('ep-sum');
-    box.hidden = !e;
-    if(!e){ box.innerHTML = ''; return; }
-    const cls = v => v===null||v===undefined ? '' : v>=0 ? 'pos' : 'neg';
-    const item = (k, v, c='') => `<span><b>${k}</b><span class="${c}">${v}</span></span>`;
-    const pct = (v,d) => v===null||v===undefined ? '—' : sgn(v,d)+'%';
-    box.innerHTML = [
-      item('高點 → 谷底', `${fd(e.peakDate)} → ${fd(e.troughDate)}`),
-      item('跌幅', e.drawdownPct.toFixed(2)+'%', 'neg'),
-      item('下跌', nf(e.declineDays,0)+' 日'),
-      item('收復', e.recoveryDays===null ? '進行中' : nf(e.recoveryDays,0)+' 日'),
-      item('量能變化', pct(e.turnoverChgPct,1), cls(e.turnoverChgPct)),
-      item('外資累計', sgnYi(e.foreignSumYi,0), cls(e.foreignSumYi)),
-      item('融資變化', e.marginChgYi===null||e.marginChgYi===undefined ? '—'
-        : `${sgnYi(e.marginChgYi,0)} (${pct(e.marginChgPct,1)})`, cls(e.marginChgYi)),
-      item('融資殺盤幅度', e.killRatio===null||e.killRatio===undefined ? '—' : nf(e.killRatio,2)),
-      item('維持率低點', ratioLow(e))
+    // ── 期貨
+    const fu = lastOf('foreignTxNetOI'), pf = prev(fu, r=>r.foreignTxNetOI);
+    const fChg = fu && pf!==null ? fu.v - pf : null;
+    // Twenty sessions back: about a month of repositioning.
+    const back = fu && fu.i >= 20 && has(rows[fu.i-20].foreignTxNetOI) ? rows[fu.i-20] : null;
+    const f20 = back ? fu.v - back.foreignTxNetOI : null;
+    document.getElementById('t-fut').innerHTML = [
+      tile('外資台指期淨未平倉', fu ? nf(fu.v,0)+' 口' : '—',
+        (fChg===null ? '' : `較前日 <span class="${cls(fChg)}">${sgn(fChg,0)} 口</span>`) + lag(fu),
+        fu ? cls(fu.v) : '', true),
+      tile('近 20 日增減', f20===null ? '—' : sgn(f20,0)+' 口',
+        back ? `自 ${fd(back.date)}` : '', cls(f20), true)
     ].join('');
   }
 
-  // ── Episode overlay ───────────────────────────────────────
-  // Every episode rebased to 100 at its own peak (or trough), x = trading days
-  // from that anchor. This is the only view that answers "is this one tracking
-  // 2022 or 2024?" — the main chart can only show one window at a time.
-  //
-  // Colour encodes CLASS, not identity: one muted ink for every recovered
-  // episode, one accent for the open one, one for whatever the table has
-  // selected. Twelve categorical hues would be unreadable and unvalidatable;
-  // identity comes from the hover tooltip instead.
-  const overlay = echarts.init(document.getElementById('overlay'), null, {renderer:'canvas'});
-  let ovAlign = 'peak';
-
-  function ovPath(e){
-    // Peak-aligned runs peak -> recovery (or the end of the data). Trough-aligned
-    // starts 30 sessions before the low so the approach into it is visible.
-    const from = ovAlign === 'peak' ? e.peakIdx : Math.max(0, e.troughIdx - 30);
-    const to   = e.recoverIdx === null ? N - 1 : e.recoverIdx;
-    const anchor = ovAlign === 'peak' ? e.peakIdx : e.troughIdx;
-    const base = rows[anchor].close;
-    if(base === null || base === undefined) return [];
-    const out = [];
-    for(let i = from; i <= to; i++){
-      const c = rows[i].close;
-      if(c === null || c === undefined) continue;
-      out.push([i - anchor, +(c / base * 100).toFixed(2)]);
-    }
-    return out;
-  }
-
-  function renderOverlay(){
-    const narrow = isNarrow();
-    const cur = episodes.find(e => e.status === 'ongoing');
-    const series = episodes.map((e,i) => {
-      const on   = i === selected;
-      const live = e === cur;
-      // Draw order: context first, the two highlighted classes on top.
-      const z = on ? 3 : live ? 2 : 1;
-      const color = on ? COLORS.turnover : live ? COLORS.cum : COLORS.ink4;
-      return {
-        name: `#${i+1} ${fd(e.peakDate)}`,
-        type: 'line', data: ovPath(e), showSymbol: false,
-        z, zlevel: 0, silent: false,
-        // Without this ECharts only fires events on symbols, and these lines
-        // have none — clicks on the line itself would never arrive.
-        triggerLineEvent: true, cursor: 'pointer',
-        lineStyle: {width: on || live ? 2 : 1, color, opacity: on || live ? 1 : .5},
-        emphasis: {focus: 'series', lineStyle: {width: 2.5, opacity: 1}},
-        // A drawdown episode is a fall; 跌幅 in the label keeps the reader
-        // anchored to the same number the table reports.
-        tooltip: {}
-      };
-    });
-    overlay.setOption({
-      backgroundColor: 'transparent', animation: false,
-      textStyle: {fontFamily: 'Inter, "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif'},
-      grid: {left: narrow ? 44 : 62, right: narrow ? 12 : 26, top: 16, bottom: 34},
-      xAxis: {
-        type: 'value', name: ovAlign === 'peak' ? '距高點交易日' : '距谷底交易日',
-        nameLocation: 'middle', nameGap: 20,
-        nameTextStyle: {color: COLORS.ink3, fontSize: narrow ? 10 : 11},
-        axisLine: {lineStyle: {color: COLORS.line}}, axisTick: {show: false},
-        splitLine: {show: false},
-        axisLabel: {color: COLORS.ink3, fontSize: narrow ? 9 : 11}
-      },
-      yAxis: {
-        type: 'value', scale: true,
-        axisLine: {show: false}, axisTick: {show: false},
-        splitLine: {lineStyle: {color: COLORS.line2}},
-        axisLabel: {color: COLORS.ink3, fontSize: narrow ? 9 : 11}
-      },
-      // Anchor line at 100: above it the episode has recovered its start level.
-      graphic: [],
-      tooltip: {
-        trigger: 'item', confine: true,
-        backgroundColor: alpha(COLORS.surface,.97), borderColor: COLORS.line, borderWidth: 1,
-        textStyle: {color: COLORS.ink, fontSize: narrow ? 11 : 12.5},
-        extraCssText: 'border-radius:8px',
-        formatter: p => {
-          const e = episodes[+p.seriesName.slice(1) - 1];
-          if(!e) return '';
-          return `<div style="font-weight:600;margin-bottom:4px">${p.seriesName}</div>` +
-            `<div style="color:${COLORS.ink3}">${fd(e.peakDate)} → ${fd(e.troughDate)}` +
-            `${e.status === 'ongoing' ? '（進行中）' : ''}</div>` +
-            `<div>第 ${p.data[0]} 個交易日 · 指數為起點的 ${nf(p.data[1],1)}%</div>` +
-            `<div style="color:${COLORS.ink3}">整段跌幅 ${e.drawdownPct.toFixed(2)}%</div>`;
-        }
-      },
-      series: series.concat([{
-        type: 'line', data: [], markLine: {
-          silent: true, symbol: 'none', data: [{yAxis: 100}],
-          lineStyle: {color: COLORS.ink4, width: 1, type: 'dashed'},
-          label: {show: true, formatter: '起點', position: 'insideEndTop',
-                  color: COLORS.ink3, fontSize: 10}
-        }
-      }])
-    }, {notMerge: true});
-  }
-
-  // ── KPI cards ─────────────────────────────────────────────
-  function renderKpis(){
-    // A tolerance close ends an episode (so the next decline is
-    // tracked separately) without the price actually reclaiming the old high -
-    // status alone can't tell them apart from a genuine recovery. "Recovered"
-    // for stats purposes means endReason 'newhigh': price >= the prior peak.
-    const done = episodes.filter(e=>e.endReason==='newhigh');
-    const avg = (a,f)=> a.length ? a.reduce((s,x)=>s+f(x),0)/a.length : null;
-
-    // Current drawdown: distance from the all-time peak on the selected price basis
-    const HI = i => mode==='intraday' ? rows[i].high : rows[i].close;
-    let peak=-Infinity, peakAt=null;
-    for(let i=0;i<N;i++){ const h=HI(i); if(h!==null&&h>peak){peak=h;peakAt=dates[i];} }
-    const lastClose = (()=>{ for(let i=N-1;i>=0;i--) if(rows[i].close!==null) return rows[i].close; return null; })();
-    const curDD = (peak>0 && lastClose!==null) ? (lastClose-peak)/peak*100 : null;
-    // TWSE publishes per-stock margin hours after the close, so the newest
-    // session can lack a ratio; show the latest one that exists, dated.
-    const lastRatio = [...mrows].reverse().find(r=>r.marginRatio!==null&&r.marginRatio!==undefined);
-
-    const cards = [
-      ['總修正次數', episodes.length, `門檻 ${(threshold*100).toFixed(0)}% · ${mode==='intraday'?'盤中高低':'收盤價'}`],
-      ['平均跌幅', avg(episodes,e=>e.drawdownPct), '峰 → 谷', '%', 2],
-      ['平均下跌天數', avg(episodes,e=>e.declineDays), '交易日', '', 0],
-      ['平均收復天數', avg(done,e=>e.recoveryDays), done.length?`${done.length} 波已收復`:'尚無已收復波段', '', 0],
-      ['目前回檔幅度', curDD, peakAt?`距 ${fd(peakAt)} 高點`:'', '%', 2],
-      ['融資維持率'+etfTag(), lastRatio ? nf(lastRatio.marginRatio,1)+'%' : null,
-        lastRatio ? `${fd(lastRatio.date)} · 追繳線 ${MARGIN_CALL}%` : '尚無資料']
-    ];
-    document.getElementById('kpis').innerHTML = cards.map(([k,v,n,unit,d])=>{
-      const isPct = unit==='%';
-      const cls = isPct && v!==null ? (v<0?'neg':'pos') : '';
-      const txt = v===null ? '—' : typeof v==='string' ? v : (typeof v==='number' && d!==undefined
-        ? (isPct? sgn(v,d) : nf(v,d)) + (unit||'') : nf(v,0));
-      return `<div class="kpi"><div class="k">${k}</div>
-        <div class="v num ${cls}">${txt}</div><div class="n">${n||''}</div></div>`;
-    }).join('');
-  }
-
-  // ── Current-episode context ───────────────────────────────
-  // "Is this one bad?" is the question the KPI row cannot answer: -16% means
-  // nothing without knowing that four past corrections went deeper. Each metric
-  // gets a strip showing every episode's value, with the open one marked, plus
-  // its rank. The ongoing figures are still accruing — a 27-day-old decline has
-  // not finished being 27 days long — so the caption says so rather than letting
-  // the comparison read as like-for-like.
-  const CTX = [
-    {k:'drawdownPct',    t:'跌幅',       fmt:v=>sgn(v,2)+'%',  sup:'深', low:true},
-    {k:'declineDays',    t:'下跌天數',   fmt:v=>nf(v,0)+' 日', sup:'長', low:false},
-    {k:'foreignSumYi',   t:'外資買賣超', fmt:v=>sgnYi(v,0),    sup:'多', low:true},
-    {k:'marginChgPct',   t:'融資變化',   fmt:v=>sgn(v,1)+'%',  sup:'深', low:true},
-    {k:'killRatio',      t:'融資殺盤幅度', fmt:v=>nf(v,2),     sup:'高', low:false},
-    {k:'marginRatioLow', t:'維持率低點', fmt:v=>nf(v,1)+'%',   sup:'低', low:true}
-  ];
-
-  function renderContext(){
-    const box = document.getElementById('ctx');
-    const cur = episodes.find(e=>e.status==='ongoing');
-    if(!cur){ box.hidden = true; box.innerHTML = ''; return; }
-    box.hidden = false;
-
-    const rowsHtml = CTX.map(c=>{
-      const vals = episodes.map(e=>e[c.k]).filter(v=>v!==null && v!==undefined);
-      const v = cur[c.k];
-      if(v===null || v===undefined || vals.length < 2){
-        return `<div class="ctx-row"><div class="ctx-k">${c.t}</div>
-          <div class="ctx-strip"></div><div class="ctx-v num">—</div>
-          <div class="ctx-r">資料不足</div></div>`;
-      }
-      const lo = Math.min(...vals), hi = Math.max(...vals);
-      const pos = x => hi===lo ? 50 : (x-lo)/(hi-lo)*100;
-      // rank 1 = most extreme in the direction the label names
-      const rank = vals.filter(x=> c.low ? x < v : x > v).length + 1;
-      const dots = episodes.map(e=>{
-        const x = e[c.k];
-        if(x===null || x===undefined) return '';
-        const on = e===cur;
-        return `<i class="ctx-dot${on?' on':''}" style="left:${pos(x).toFixed(1)}%"${
-          on ? '' : ` title="${fd(e.peakDate)}"`}></i>`;
-      }).join('');
-      return `<div class="ctx-row">
-        <div class="ctx-k">${c.t}</div>
-        <div class="ctx-strip">${dots}</div>
-        <div class="ctx-v num">${c.fmt(v)}</div>
-        <div class="ctx-r">第 ${rank} ${c.sup} / 共 ${vals.length} 波</div>
-      </div>`;
-    }).join('');
-
-    box.innerHTML = `<div class="ctx-head">
-        <h2>目前波段定位</h2>
-        <span class="ctx-sub">自 ${fd(cur.peakDate)} 高點起算，已 ${nf(cur.declineDays,0)} 個交易日 ·
-          數值仍在累積中，與已收復波段並非等長比較</span>
-      </div>${rowsHtml}`;
-  }
-
-  // ── Table ─────────────────────────────────────────────────
-  const COLS = [
-    {k:'idx',   t:'#',            f:(e,i)=>i+1, txt:false},
-    {k:'peakDate', t:'期間',      f:e=>`${fd(e.peakDate)} – ${fd(e.troughDate)}`, txt:true},
-    {k:'peakVal',  t:'高點',      f:e=>nf(e.peakVal,2)},
-    {k:'troughVal',t:'低點',      f:e=>nf(e.troughVal,2)},
-    {k:'drawdownPct', t:'跌幅', f:e=>`<span class="neg">${e.drawdownPct.toFixed(2)}%</span>`},
-    {k:'declineDays', t:'下跌天數',  f:e=>nf(e.declineDays,0)},
-    {k:'recoveryDays',t:'收復天數', f:e=> e.recoveryDays===null
-        ? '<span class="tag">進行中</span>'
-        // A tolerance exit ends the episode just BELOW the prior peak, so the
-        // count is days-to-tolerance, not days-to-new-high. Label it rather than
-        // let the two be read as the same thing.
-        : nf(e.recoveryDays,0) + (
-            e.endReason==='tolerance' ? ' <span class="tag alt">容差</span>' : '')},
-    {k:'avgTurnoverYi', t:'區間日均量',  f:e=>nf(e.avgTurnoverYi,0)},
-    {k:'turnoverChgPct',t:'量能變化', f:e=> e.turnoverChgPct===null?'—'
-        : `<span class="${e.turnoverChgPct>=0?'pos':'neg'}">${sgn(e.turnoverChgPct,1)}%</span>`},
-    {k:'foreignSumYi',  t:'外資累計買賣超',   f:e=> e.foreignSumYi===null?'—'
-        : `<span class="${e.foreignSumYi>=0?'pos':'neg'}">${sgn(e.foreignSumYi,0)}</span>`},
-    {k:'marginChgYi',   t:'融資餘額變化', f:e=> e.marginChgYi===null?'—'
-        : `<span class="${e.marginChgYi>=0?'pos':'neg'}">${sgn(e.marginChgYi,0)} (${sgn(e.marginChgPct,1)}%)</span>`},
-    {k:'marginRatioLow', t:'維持率低點', f:e=>ratioLow(e)},
-    {k:'fwd1mPct', t:'谷底後1個月', f:e=>fwdCell(e.fwd1mPct)},
-    {k:'fwd3mPct', t:'谷底後3個月', f:e=>fwdCell(e.fwd3mPct)},
-    {k:'fwd1yPct', t:'谷底後1年',   f:e=>fwdCell(e.fwd1yPct)},
-    {k:'killRatio',     t:'融資殺盤幅度', f:e=>{
-        if(e.killRatio===null) return '—';
-        // Single-hue sequential scale (not a rainbow); the number itself is always
-        // shown, so color never carries the meaning on its own.
-        const t = Math.max(0, Math.min(1,(e.killRatio-0.4)/1.8));
-        const a = (0.06 + t*0.46).toFixed(2);
-        const strong = e.killRatio>=1.5;
-        return `<span class="ratio num" style="background:${alpha(COLORS.turnover,a)};${strong?`box-shadow:inset 0 0 0 1px ${alpha(COLORS.turnover,.7)}`:''}">${e.killRatio.toFixed(2)}</span>`;
-      }}
-  ];
-
-  // Forward return from the trough. Null means the series does not reach that far
-  // yet — shown as 未滿 rather than a blank, so "no data yet" is not mistaken for
-  // "no move".
-  const fwdCell = v => v===null || v===undefined
-    ? '<span class="pending">未滿</span>'
-    : `<span class="${v>=0?'pos':'neg'}">${sgn(v,1)}%</span>`;
-
-  function sortedEpisodes(){
-    const list = episodes.map((e,i)=>({e, i}));
-    if(sortKey){
-      list.sort((a,b)=>{
-        let x=a.e[sortKey], y=b.e[sortKey];
-        if(sortKey==='idx'){ x=a.i; y=b.i; }
-        if(x===null||x===undefined) return 1;      // nulls always sort last
-        if(y===null||y===undefined) return -1;
-        if(typeof x==='string') return sortAsc ? x.localeCompare(y) : y.localeCompare(x);
-        return sortAsc ? x-y : y-x;
-      });
-    }
-    return list;
-  }
-
-  function renderTable(){
-    document.getElementById('thead').innerHTML = COLS.map(c=>{
-      const on = sortKey===c.k;
-      return `<th role="columnheader" scope="col" data-k="${c.k}" ` +
-        `aria-sort="${on ? (sortAsc?'ascending':'descending') : 'none'}" ` +
-        `class="${c.txt?'txt':''} ${on?'sorted '+(sortAsc?'asc':''):''}">` +
-        `<button type="button">${c.t}</button></th>`;
-    }).join('');
-
-    document.getElementById('tbody').innerHTML = sortedEpisodes().map(({e,i})=>
-      `<tr data-i="${i}" role="row" tabindex="0" aria-selected="${i===selected}">` +
-      COLS.map(c=>`<td role="gridcell" class="${c.txt?'txt':'num'}" data-label="${c.t}">${c.f(e,i)}</td>`).join('') +
-      `</tr>`
-    ).join('');
-
-    syncSortUI();
-  }
-
-  // renderTable() replaces the header and row nodes wholesale, so anything that
-  // re-renders in response to a keypress has to put focus back deliberately —
-  // otherwise a keyboard user is silently dumped at the top of the document.
-  function refocus(sel){
-    const el = document.querySelector(sel);
-    if(el) el.focus();
-  }
-
-  // ── Interaction ───────────────────────────────────────────
-  // Re-anchor the cumulative foreign-flow line to the left edge of the view.
-  function setCumBase(from){
-    if(from === cumBase) return false;
-    cumBase = from;
-    cumView = buildCum(from);
-    return true;
-  }
-
-  function select(i){
-    selected = (selected===i) ? -1 : i;
-    if(selected>=0){
-      // Zoom to the episode plus 40 trading days either side, so the run-up into
-      // the peak and the shape of the recovery are both visible.
-      const e = episodes[selected], pad = 40;
-      const end = e.recoverIdx===null ? N-1 : e.recoverIdx;
-      zoomRange = {s: Math.max(0, e.peakIdx - pad), e: Math.min(N-1, end + pad)};
-    }else{
-      zoomRange = null;
-    }
-    setCumBase(zoomRange ? zoomRange.s : 0);
-    // Order matters: renderChart() rebuilds with notMerge:true and re-applies
-    // zoomRange itself. Dispatching a zoom before this call would be discarded.
-    renderChart(); renderOverlay(); renderTable();
-  }
-
-  // Selecting from the table or the overlay zooms the chart, so bring the chart
-  // panel to the top of the window — otherwise the zoom happens off-screen.
-  // Skipped when the panel's top is already in view, so stepping through
-  // episodes from the chart itself never jolts the page.
-  const chartPanel = document.getElementById('chart').closest('.panel');
-  function revealChart(){
-    if(selected < 0) return;
-    const top = chartPanel.getBoundingClientRect().top;
-    if(top < 0 || top > window.innerHeight * 0.25)
-      chartPanel.scrollIntoView({block: 'start', behavior: 'smooth'});
-  }
-
-  // Clicking a path in the overlay selects the same episode as its table row.
-  overlay.on('click', p=>{
-    if(p.componentType !== 'series' || p.seriesIndex >= episodes.length) return;
-    select(p.seriesIndex);
-    revealChart();
-    // Focus follows the selection to its row, without scrolling away from the
-    // chart, so the arrow keys carry on from the episode just picked.
-    const tr = document.querySelector(`#tbody tr[data-i="${selected}"]`);
-    if(tr) tr.focus({preventScroll: true});
-  });
-
-  document.getElementById('tbody').addEventListener('click', ev=>{
-    const tr = ev.target.closest('tr'); if(!tr) return;
-    select(+tr.dataset.i);
-    revealChart();
-  });
-
-  const step = d => {
-    if(!episodes.length) return;
-    const i = selected < 0 ? (d > 0 ? 0 : episodes.length-1) : selected + d;
-    if(i >= 0 && i < episodes.length && i !== selected) select(i);
-  };
-  document.getElementById('ep-prev').addEventListener('click', ()=>step(-1));
-  document.getElementById('ep-next').addEventListener('click', ()=>step(1));
-  document.getElementById('ep-clear').addEventListener('click', ()=>{
-    if(selected >= 0) select(selected);
-    document.getElementById('ep-next').focus();   // the clicked button just hid
-  });
-
-  // Keyboard equivalent of the row click, plus arrow-key movement between rows
-  // so the grid can be worked without a pointer.
-  document.getElementById('tbody').addEventListener('keydown', ev=>{
-    const tr = ev.target.closest('tr'); if(!tr) return;
-    const i = +tr.dataset.i;
-    if(ev.key === 'Enter' || ev.key === ' '){
-      ev.preventDefault();                     // Space would scroll the page
-      select(i);
-      revealChart();
-      const tr = document.querySelector(`#tbody tr[data-i="${i}"]`);
-      if(tr) tr.focus({preventScroll: true});   // keep the chart in view
-      return;
-    }
-    const step = ev.key === 'ArrowDown' ? 1 : ev.key === 'ArrowUp' ? -1 : 0;
-    if(step){
-      ev.preventDefault();
-      const next = step > 0 ? tr.nextElementSibling : tr.previousElementSibling;
-      if(next) next.focus();
-    }else if(ev.key === 'Home' || ev.key === 'End'){
-      ev.preventDefault();
-      const all = document.querySelectorAll('#tbody tr');
-      (ev.key === 'Home' ? all[0] : all[all.length-1]).focus();
-    }
-  });
-
-  // Mobile sort control. The sticky headers are hidden in card view, so sorting
-  // needs its own affordance; it shares sortKey/sortAsc with the header clicks
-  // so the two can never disagree.
-  const sortField = document.getElementById('sort-field');
-  const sortDir   = document.getElementById('sort-dir');
-  sortField.innerHTML = '<option value="">預設（時間順序）</option>' +
-    COLS.filter(c=>c.k!=='idx').map(c=>`<option value="${c.k}">${c.t}</option>`).join('');
-  function syncSortUI(){
-    sortField.value = sortKey || '';
-    sortDir.textContent = sortAsc ? '▲ 由小到大' : '▼ 由大到小';
-    sortDir.disabled = !sortKey;
-  }
-  sortField.addEventListener('change', ()=>{
-    sortKey = sortField.value || null;
-    renderTable();
-  });
-  sortDir.addEventListener('click', ()=>{
-    if(!sortKey) return;
-    sortAsc = !sortAsc;
-    renderTable();
-  });
-
-  // One handler covers both mouse and keyboard: the header control is a real
-  // button, so Enter/Space arrive here as clicks.
-  document.getElementById('thead').addEventListener('click', ev=>{
-    const th = ev.target.closest('th'); if(!th) return;
-    const k = th.dataset.k;
-    if(sortKey===k) sortAsc = !sortAsc; else { sortKey=k; sortAsc=false; }
-    renderTable();
-    refocus(`#thead th[data-k="${k}"] button`);
-  });
-
-  function segHandler(id, apply, after){
-    document.getElementById(id).addEventListener('click', ev=>{
-      const b = ev.target.closest('button'); if(!b) return;
-      [...b.parentNode.children].forEach(x=>x.setAttribute('aria-pressed', String(x===b)));
-      apply(b.dataset.v);
-      (after || recompute)();
-    });
-  }
-  segHandler('seg-threshold', v=>{ threshold = parseFloat(v); });
-  segHandler('seg-mode',      v=>{ mode = v; });
-  segHandler('seg-tol',       v=>{ recoverTol = parseFloat(v); });
-  // Switching desk changes only what the two flow panels plot — the episodes,
-  // the table and the selection are all unaffected, so skip the full recompute.
-  segHandler('seg-desk',      v=>{ desk = v; cumView = buildCum(cumBase); }, renderChart);
-  segHandler('seg-ov',        v=>{ ovAlign = v; }, renderOverlay);
-  // Excluding ETFs changes the episodes' margin metrics, but not which
-  // episodes exist (those come from prices), so the selection and zoom stay.
-  segHandler('seg-etf',       v=>{ etf = v; buildMargin(); episodes = detect(threshold, mode); },
-    ()=>{ renderKpis(); renderContext(); renderChart(); renderOverlay(); renderTable(); });
-  // Switching line/candlestick doesn't change which episodes exist, so only the
-  // chart is rebuilt — the table, the selection and the zoom all stay put.
-  segHandler('seg-chart',     v=>{ chartType = v; }, renderChart);
-
-  // Start-day picker: jump the left edge of the view to the first session on or
-  // after the chosen date, keeping the right edge where it is.
-  const startInput = document.getElementById('zoom-start');
-  startInput.min = dates[0]; startInput.max = dates[N-1];
-  function syncStartInput(){ startInput.value = dates[zoomRange ? zoomRange.s : 0]; }
-  startInput.addEventListener('change', ()=>{
-    const v = startInput.value;
-    if(!v){ syncStartInput(); return; }
-    let s = dates.findIndex(d => d >= v);
-    if(s < 0) s = N-1;
-    let e = zoomRange ? zoomRange.e : N-1;
-    if(e <= s) e = N-1;
-    if(s >= e) s = Math.max(0, e-1);
-    chart.dispatchAction({type:'dataZoom', startValue:s, endValue:e});
-  });
-
-  // Keep zoomRange in step with pans and wheel-zooms, so a later rebuild
-  // (e.g. toggling to candlesticks) doesn't throw away where the user is looking.
-  let cumTimer = null;
-  chart.on('dataZoom', ()=>{
-    const dz = (chart.getOption().dataZoom || [])[0];
-    if(!dz) return;
-    let s = dz.startValue, e = dz.endValue;
-    // Wheel-zoom often reports percentages rather than indices; accept either.
-    if(typeof s !== 'number' || typeof e !== 'number'){
-      if(typeof dz.start !== 'number' || typeof dz.end !== 'number') return;
-      s = dz.start / 100 * (N-1);
-      e = dz.end   / 100 * (N-1);
-    }
-    zoomRange = (s <= 0 && e >= N-1) ? null : {s:Math.round(s), e:Math.round(e)};
-    syncStartInput();
-
-    clearTimeout(cumTimer);
-    cumTimer = setTimeout(()=>{
-      if(!setCumBase(zoomRange ? zoomRange.s : 0)) return;
-      // Partial merge: only series 3's data and its title change, so there is no
-      // need to rebuild every grid while the user is still dragging.
-      chart.setOption({
-        title: NAMES.map((n,i)=>({text: panelTitle(i, n)})),
-        series: NAMES.map((_,i)=> i===CUM ? {data: cumView} : {})
-      });
-    }, 120);
-  });
-
-  // ── CSV export ────────────────────────────────────────────
-  document.getElementById('btn-csv').addEventListener('click', ()=>{
-    const head = ['#','起日','訖日','高點','低點','跌幅%','下跌天數','收復天數',
-      '區間日均量(億)','量能變化%','外資累計買賣超(億)','融資起點(億)','融資低點(億)',
-      '融資變化(億)','融資變化%','谷底後1個月%','谷底後3個月%','谷底後1年%',
-      '融資殺盤幅度','維持率低點%','維持率低點日','狀態'];
-    const esc = v => (v===null||v===undefined) ? '' :
-      (/[",\n]/.test(String(v)) ? '"'+String(v).replace(/"/g,'""')+'"' : String(v));
-    const body = sortedEpisodes().map(({e,i})=>[
-      i+1, e.peakDate, e.troughDate,
-      e.peakVal?.toFixed(2), e.troughVal?.toFixed(2), e.drawdownPct.toFixed(2),
-      e.declineDays, e.recoveryDays===null?'進行中':e.recoveryDays,
-      e.avgTurnoverYi?.toFixed(0), e.turnoverChgPct?.toFixed(1),
-      e.foreignSumYi?.toFixed(0), e.marginStartYi?.toFixed(0), e.marginTroughYi?.toFixed(0),
-      e.marginChgYi?.toFixed(0), e.marginChgPct?.toFixed(1),
-      e.fwd1mPct?.toFixed(1), e.fwd3mPct?.toFixed(1), e.fwd1yPct?.toFixed(1),
-      e.killRatio?.toFixed(2), e.marginRatioLow?.toFixed(2), e.marginRatioLowDate,
-      e.status==='ongoing' ? '進行中'
-        : e.endReason==='tolerance' ? '容差收盤'
-        : '創新高'
-    ].map(esc).join(','));
-
-    const blob = new Blob(['﻿'+[head.join(','),...body].join('\n')],
-      {type:'text/csv;charset=utf-8'});
-    const a = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    a.href = url;
-    a.download = `taiex-corrections-${(threshold*100).toFixed(0)}pct-${mode}.csv`;
-    a.click();
-    // Revoking in the same tick races the download in Firefox — the URL can be
-    // dead before the browser has read the blob. Yield first.
-    setTimeout(()=>URL.revokeObjectURL(url), 0);
-  });
-
-  // ── Recompute ─────────────────────────────────────────────
-  function recompute(){
-    episodes = detect(threshold, mode);
-    // The episode list itself just changed, so the old selection index no longer
-    // refers to the same wave. Drop the zoom and the cumulative rebase with it:
-    // keeping a window anchored to an episode that no longer exists leaves the
-    // user in an unexplained 100-session view with no highlighted row to explain
-    // it, and the flow panel still rebased to that vanished episode's start.
-    // Back to the opening view instead.
-    selected = -1;
-    zoomRange = latestYear();
-    setCumBase(zoomRange ? zoomRange.s : 0);
-    renderKpis(); renderContext(); renderChart(); renderOverlay(); renderTable();
-  }
-
-  const cov = META.coverage || {};
   document.getElementById('meta').textContent =
-    `${META.start||dates[0]} ~ ${META.end||dates[N-1]} · ${N} 個交易日 · ` +
-    `籌碼覆蓋 成交${cov.turnover??'?'} / 外資${cov.foreign??'?'} / 融資${cov.margin??'?'} / 維持率${cov.marginRatio??'?'}` +
-    (META.generatedAt ? ` · 更新於 ${META.generatedAt.replace('T',' ')}` : '');
+    `${fd(latestDate)} 收盤 · ` +
+    (META.generatedAt ? `更新於 ${META.generatedAt.replace('T',' ')}` : `${N} 個交易日`);
 
-  recompute();
+  // Reveal before the chart initialises: ECharts measures its container once,
+  // and a hidden one measures 0x0.
+  document.getElementById('app').hidden = false;
+  renderTiles();
 
-  // ── Theme ─────────────────────────────────────────────────
-  const themeBtn = document.getElementById('btn-theme');
-  const syncThemeBtn = () => {
-    const dark = document.documentElement.dataset.theme !== 'light';
-    themeBtn.textContent = dark ? '☀ 淺色' : '☾ 深色';
-    themeBtn.setAttribute('aria-pressed', dark ? 'false' : 'true');
-  };
-  syncThemeBtn();
-  themeBtn.addEventListener('click', ()=>{
-    const next = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
-    document.documentElement.dataset.theme = next;
-    try { localStorage.setItem('atlas-theme', next); } catch(e) {}
-    syncThemeBtn();
-    readColors();
-    // Redraw in place: selection, zoom and sort all survive a theme change.
-    renderKpis(); renderContext(); renderChart(); renderOverlay(); renderTable();
+  const mc = window.MarketChart.create({
+    el: document.getElementById('chart'), rows, futures: true
   });
+  // Opens on the last six months: recent enough to read the day's bars,
+  // long enough to see the trend they sit in.
+  mc.setView(mc.latest(6));
+  mc.render();
 
-  // Re-measure once after first paint: the table can introduce a scrollbar, and
-  // a late webfont can shift metrics, both of which change the container width.
-  requestAnimationFrame(()=>{ chart.resize(); overlay.resize(); });
-
-  // Crossing the mobile breakpoint changes grid geometry, axis fonts and label
-  // formats, so it needs a full re-render — a bare resize() would keep the old
-  // desktop margins on a phone. On desktop the panel heights follow the window
-  // height, so a change there rebuilds too. Debounced because rotation fires a
-  // burst.
-  let wasNarrow = isNarrow(), rzTimer = null;
-  window.addEventListener('resize', ()=>{
-    clearTimeout(rzTimer);
-    rzTimer = setTimeout(()=>{
-      const now = isNarrow();
-      if(now !== wasNarrow){ wasNarrow = now; renderChart(); renderOverlay(); }
-      else if(layout().totalH !== L.totalH){ renderChart(); overlay.resize(); }
-      else { chart.resize(); overlay.resize(); }
-    }, 150);
-  });
+  window.TWF.initTheme(document.getElementById('btn-theme'), ()=>{ renderTiles(); mc.render(); });
+  requestAnimationFrame(()=>mc.chart.resize());
 })();
 </script>
 </body>
